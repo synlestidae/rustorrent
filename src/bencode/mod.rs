@@ -25,6 +25,16 @@ impl BString {
     }
 }
 
+impl BInt {
+    pub fn new(number: u64) -> BInt {
+        BInt(number)
+    }
+
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
+}
+
 pub enum Bencode {
     BString(BString),
     BInt(BInt),
@@ -41,6 +51,7 @@ pub struct DecodeError {
 #[derive(Debug)]
 pub enum DecodeErrorKind {
     ExpectedByte(char),
+    EndOfStream, 
     Utf8Err(Utf8Error),
     IntParsingErr(ParseIntError),
 }
@@ -51,15 +62,22 @@ impl fmt::Display for BString {
     }
 }
 
+impl fmt::Display for BInt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_u64())
+    }
+}
+
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(match self.kind {
             ExpectedByte(ref ch) => write!(f, "expected `{}`", ch),
+            EndOfStream => write!(f, "reached end of input"),
             Utf8Err(ref u8e) => write!(f, "{}", u8e),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
         });
         match self.location {
-            Some(ref l) => write!(f, " at location `{}`", l),
+            Some(ref l) => write!(f, " at location `{}` of the byte stream", l),
             None => Ok(())
         }
     }
@@ -69,6 +87,7 @@ impl error::Error for DecodeError {
     fn description(&self) -> &str {
         match self.kind {
             ExpectedByte(..) => "unexpected input byte",
+            EndOfStream => "end of input, no more bytes",
             Utf8Err(..) => "failed with an utf8error",
             IntParsingErr(..) => "failed to parse integer",
         }

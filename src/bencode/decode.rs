@@ -18,3 +18,34 @@ pub fn bstring_decode(bytes: Vec<u8>) -> Result<BString, DecodeError> {
     Ok(bstring)
 }
 
+pub fn bint_decode(bytes: Vec<u8>) -> Result<BInt, DecodeError> {
+    let mut number_string = String::new();
+    if bytes.len() > 1 {
+        if (bytes[0] as char) == 'i' {
+            match bytes[1] as char {
+                '0' => {
+                    if bytes.len() >= 2 && (bytes[2] as char) == 'e' {
+                        return Ok(BInt::new(0u64))
+                    } else {
+                        return Err(DecodeError { location: None, kind: DecodeErrorKind::ExpectedByte('e') } )
+                    }
+                }
+                _ => {
+                    for i in &bytes[1..bytes.len()] {
+                        if (*i as char) != 'e' {
+                            number_string.push(*i as char);
+                        } else { break; }
+                    }
+                }
+            }
+        } else {
+            return Err(DecodeError { location: None, kind: DecodeErrorKind::ExpectedByte('i') } )
+        }
+    } else {
+        return Err(DecodeError { location: None, kind: DecodeErrorKind::EndOfStream } )
+    }
+    let parsint = try!(number_string.parse::<u64>());
+    let number = BInt::new(parsint);
+    Ok(number)
+}
+
