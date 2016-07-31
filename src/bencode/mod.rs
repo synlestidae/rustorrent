@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::{error, fmt};
 use std::string::FromUtf8Error;
-use std::str::Utf8Error;
 use std::num::ParseIntError;
 
 use self::DecodeErrorKind::*;
@@ -11,8 +10,11 @@ pub mod encode;
 
 #[derive(Debug)]
 pub struct BString(Vec<u8>);
+#[derive(Debug)]
 pub struct BInt(u64);
+#[derive(Debug)]
 pub struct BList(Vec<Bencode>);
+#[derive(Debug)]
 pub struct BDict(BTreeMap<BString, Bencode>);
 
 impl BString {
@@ -35,6 +37,22 @@ impl BInt {
     }
 }
 
+impl BList {
+    pub fn new() -> BList {
+        let vector: Vec<Bencode> = Vec::new();
+        BList(vector)
+    }
+
+    pub fn to_vec(self) -> Vec<Bencode> {
+        self.0
+    }
+
+    pub fn push(&mut self, value: Bencode) {
+        self.0.push(value);
+    }
+}
+
+#[derive(Debug)]
 pub enum Bencode {
     BString(BString),
     BInt(BInt),
@@ -52,7 +70,8 @@ pub struct DecodeError {
 pub enum DecodeErrorKind {
     ExpectedByte(char),
     EndOfStream, 
-    Utf8Err(Utf8Error),
+    InvalidString,
+    UnknownType,
     IntParsingErr(ParseIntError),
 }
 
@@ -73,7 +92,8 @@ impl fmt::Display for DecodeError {
         try!(match self.kind {
             ExpectedByte(ref ch) => write!(f, "expected `{}`", ch),
             EndOfStream => write!(f, "reached end of input"),
-            Utf8Err(ref u8e) => write!(f, "{}", u8e),
+            InvalidString => write!(f, "not a valid string"),
+            UnknownType => write!(f, "type not recognised as bencoded"),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
         });
         match self.location {
@@ -88,17 +108,9 @@ impl error::Error for DecodeError {
         match self.kind {
             ExpectedByte(..) => "unexpected input byte",
             EndOfStream => "end of input, no more bytes",
-            Utf8Err(..) => "failed with an utf8error",
+            InvalidString => "failed to parse bytes as a string",
+            UnknownType => "cannot parse as a valid bencoded type",
             IntParsingErr(..) => "failed to parse integer",
-        }
-    }
-}
-
-impl From<FromUtf8Error> for DecodeError {
-    fn from(utf8err: FromUtf8Error) -> DecodeError {
-        DecodeError {
-            location: None,
-            kind: Utf8Err(utf8err.utf8_error()), 
         }
     }
 }
