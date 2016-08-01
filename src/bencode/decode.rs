@@ -57,17 +57,17 @@ pub fn bint_decode(bytes: Vec<u8>) -> Result<BInt, DecodeError> {
 
 pub fn blist_decode(bytes: Vec<u8>) -> Result<BList, DecodeError> {
     let mut result_list = BList::new();
+    let mut bytes = bytes;
     if bytes.len() > 1 {
         loop {
             if (bytes[0] as char) == 'l' {
                 match bytes[1] as char {
                     'e' => {
-                        return Ok(BList::new())
+                        return Ok(result_list)
                     },
                     'i' => {
                         let bint = try!(bint_decode(bytes[1..bytes.len()].to_vec()));
-                        result_list.push(Bencode::BInt(bint));
-                        //bytes.remove 
+                        result_list.push(Bencode::BInt(bint)); 
                     },
                     'l' => {
                         let blist = try!(blist_decode(bytes[1..bytes.len()].to_vec()));
@@ -81,6 +81,8 @@ pub fn blist_decode(bytes: Vec<u8>) -> Result<BList, DecodeError> {
                         if (bytes[1] as char).is_digit(10) {
                             let bstring = try!(bstring_decode(bytes[1..bytes.len()].to_vec()));
                             result_list.push(Bencode::BString(bstring.0));
+                            bytes = bstring.1;
+                            bytes.insert(0, 'l' as u8);
                         } else {
                             return Err(DecodeError { position: None, kind: DecodeErrorKind::UnknownType } )
                         }
@@ -89,7 +91,6 @@ pub fn blist_decode(bytes: Vec<u8>) -> Result<BList, DecodeError> {
             } else {
                 return Err(DecodeError { position: None, kind: DecodeErrorKind::ExpectedByte('l') } )
             }
-            if (bytes[1] as char) == 'e' { break; }
         }
     } else {
         return Err(DecodeError { position: None, kind: DecodeErrorKind::EndOfStream } )

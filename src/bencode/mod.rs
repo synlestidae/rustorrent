@@ -8,13 +8,9 @@ use self::DecodeErrorKind::*;
 pub mod decode;
 pub mod encode;
 
-#[derive(Debug)]
 pub struct BString(Vec<u8>);
-#[derive(Debug)]
 pub struct BInt(u64);
-#[derive(Debug)]
 pub struct BList(Vec<Bencode>);
-#[derive(Debug)]
 pub struct BDict(BTreeMap<BString, Bencode>);
 
 impl BString {
@@ -43,16 +39,11 @@ impl BList {
         BList(vector)
     }
 
-    pub fn to_vec(self) -> Vec<Bencode> {
-        self.0
-    }
-
     pub fn push(&mut self, value: Bencode) {
         self.0.push(value);
     }
 }
 
-#[derive(Debug)]
 pub enum Bencode {
     BString(BString),
     BInt(BInt),
@@ -75,15 +66,50 @@ pub enum DecodeErrorKind {
     IntParsingErr(ParseIntError),
 }
 
+impl fmt::Display for Bencode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Bencode::BString(ref s) => write!(f, "{}", s),
+            Bencode::BInt(..) => write!(f, "to be implemented"),
+            Bencode::BList (ref l) => write!(f, "{:?}", l),
+            Bencode::BDict(..) => write!(f, "to be implemented"),
+        }
+    }
+}
+
+impl fmt::Debug for Bencode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 impl fmt::Display for BString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_string().unwrap())
     }
 }
 
+impl fmt::Debug for BString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 impl fmt::Display for BInt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_u64())
+    }
+}
+
+impl fmt::Debug for BInt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl fmt::Debug for BList {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
     }
 }
 
