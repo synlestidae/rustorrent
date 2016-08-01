@@ -62,7 +62,7 @@ pub enum Bencode {
 
 #[derive(Debug)]
 pub struct DecodeError {
-    location: Option<String>,
+    position: Option<u64>,
     kind: DecodeErrorKind,
 }
 
@@ -96,8 +96,8 @@ impl fmt::Display for DecodeError {
             UnknownType => write!(f, "type not recognised as bencoded"),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
         });
-        match self.location {
-            Some(ref l) => write!(f, " at location `{}` of the byte stream", l),
+        match self.position {
+            Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
             None => Ok(())
         }
     }
@@ -118,7 +118,7 @@ impl error::Error for DecodeError {
 impl From<ParseIntError> for DecodeError {
     fn from(intperr: ParseIntError) -> DecodeError {
         DecodeError {
-            location: None,
+            position: None,
             kind: IntParsingErr(intperr), 
         }
     }
