@@ -23,7 +23,7 @@ pub fn bstring_decode(bytes: Vec<u8>) -> Result<(BString, Vec<u8>), DecodeError>
         });
     }
     let length_int = try!(length_str.parse::<usize>());
-    let string_data = &bytes[length_str.len() + 1..(length_int + length_str.len()) - 1];
+    let string_data = &bytes[length_str.len() + 1..(length_int + length_str.len()) + 1];
     let remaining = bytes[string_data.len() + length_str.len() + 1..].to_vec();
     let bstring = BString::new(string_data);
     Ok((bstring, remaining))
