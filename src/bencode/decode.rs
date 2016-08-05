@@ -1,5 +1,28 @@
 use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind};
 
+pub fn b_decode(bytes: Vec<u8>) -> Result<Bencode, DecodeError> {
+    if bytes.len() == 0 {
+        return Err(DecodeError {
+                position: None,
+                kind: DecodeErrorKind::EndOfStream,
+        });
+    }
+
+    if bytes[0] == 'i' as u8 { 
+        let result = try!(bint_decode(bytes));
+        Ok(Bencode::BInt(result))
+    } else if bytes[0] == 'l' as u8 {
+        let result = try!(blist_decode(bytes));
+        Ok(Bencode::BList(result))
+    } else if bytes[0] == 'd' as u8 {
+        let result = try!(bdict_decode(bytes));
+        Ok(Bencode::BDict(BDict(result.0)))
+    } else {
+        let result = try!(bstring_decode(bytes)).0;
+        Ok(Bencode::BString(result))
+    }
+}
+
 pub fn bstring_decode(bytes: Vec<u8>) -> Result<(BString, Vec<u8>), DecodeError> {
     let mut length_str = String::new();
     let mut position = 0u64;

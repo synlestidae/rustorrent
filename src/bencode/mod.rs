@@ -38,6 +38,9 @@ impl BList {
         let vector: Vec<Bencode> = Vec::new();
         BList(vector)
     }
+    pub fn from(src_list: Vec<Bencode>) -> BList {
+        BList(src_list)
+    }
 
     pub fn push(&mut self, value: Bencode) {
         self.0.push(value);
