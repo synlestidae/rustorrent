@@ -9,7 +9,7 @@ pub mod decode;
 pub mod encode;
 
 pub struct BString(Vec<u8>);
-pub struct BInt(u64);
+pub struct BInt(i64);
 pub struct BList(Vec<Bencode>);
 pub struct BDict(BTreeMap<BString, Bencode>);
 
@@ -24,11 +24,11 @@ impl BString {
 }
 
 impl BInt {
-    pub fn new(number: u64) -> BInt {
+    pub fn new(number: i64) -> BInt {
         BInt(number)
     }
 
-    pub fn to_u64(&self) -> u64 {
+    pub fn to_i64(&self) -> i64 {
         self.0
     }
 }
@@ -60,10 +60,11 @@ pub struct DecodeError {
 #[derive(Debug)]
 pub enum DecodeErrorKind {
     ExpectedByte(char),
-    EndOfStream, 
+    EndOfStream,
     InvalidString,
     UnknownType,
     IntParsingErr(ParseIntError),
+    IntNegativeZero,
 }
 
 impl fmt::Display for Bencode {
@@ -71,7 +72,7 @@ impl fmt::Display for Bencode {
         match *self {
             Bencode::BString(ref s) => write!(f, "{}", s),
             Bencode::BInt(..) => write!(f, "to be implemented"),
-            Bencode::BList (ref l) => write!(f, "{:?}", l),
+            Bencode::BList(ref l) => write!(f, "{:?}", l),
             Bencode::BDict(..) => write!(f, "to be implemented"),
         }
     }
@@ -97,7 +98,7 @@ impl fmt::Debug for BString {
 
 impl fmt::Display for BInt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_u64())
+        write!(f, "{}", self.to_i64())
     }
 }
 
@@ -121,10 +122,11 @@ impl fmt::Display for DecodeError {
             InvalidString => write!(f, "not a valid string"),
             UnknownType => write!(f, "type not recognised as bencoded"),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
+            IntNegativeZero => write!(f, "-0 is not a valid integer"),
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
-            None => Ok(())
+            None => Ok(()),
         }
     }
 }
@@ -137,6 +139,7 @@ impl error::Error for DecodeError {
             InvalidString => "failed to parse bytes as a string",
             UnknownType => "cannot parse as a valid bencoded type",
             IntParsingErr(..) => "failed to parse integer",
+            IntNegativeZero => "-0 is not a valid integer",
         }
     }
 }
@@ -145,8 +148,7 @@ impl From<ParseIntError> for DecodeError {
     fn from(intperr: ParseIntError) -> DecodeError {
         DecodeError {
             position: None,
-            kind: IntParsingErr(intperr), 
+            kind: IntParsingErr(intperr),
         }
     }
 }
-
