@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
-use bencode::BString;
-use bencode::decode::{bint_decode, bstring_decode};
+use bencode::{BString, Bencode};
+#[allow(unused_imports)]
+use bencode::decode::{bint_decode, bstring_decode, bdict_decode};
 
 #[test]
 pub fn test_decodes_int_0() {
@@ -60,6 +61,13 @@ pub fn test_decodes_32bit_integer_range() {
 #[test]
 pub fn test_decodes_hello_world_string() {
     test_decode_str("Hello, world!", "13:Hello, world!");
+}
+
+#[test]
+pub fn test_decodes_dict() {
+    let dict = bdict_decode(&"d3:cow3:moo4:spam4:eggse".to_string().into_bytes(), &mut 0).unwrap();
+    println!("dict {:?}", dict);
+    assert_eq!(dict.get("cow").unwrap(), &Bencode::BString(BString::from_str("moo")));
 }
 
 #[cfg(test)]
