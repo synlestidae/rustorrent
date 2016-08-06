@@ -1,64 +1,67 @@
 use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind};
 
-pub fn b_decode(bytes: Vec<u8>) -> Result<Bencode, DecodeError> {
-    if bytes.len() == 0 {
+pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, DecodeError> {
+    if bytes.len() == 0 || *position >= bytes.len() {
         return Err(DecodeError {
                 position: None,
                 kind: DecodeErrorKind::EndOfStream,
         });
     }
 
-    if bytes[0] == 'i' as u8 { 
-        let result = try!(bint_decode(bytes));
+    if bytes[*position] == 'i' as u8 { 
+        let result = try!(bint_decode(bytes, position));
         Ok(Bencode::BInt(result))
-    } else if bytes[0] == 'l' as u8 {
-        let result = try!(blist_decode(bytes));
+    } else if bytes[*position] == 'l' as u8 {
+        let result = try!(blist_decode(bytes, position));
         Ok(Bencode::BList(result))
-    } else if bytes[0] == 'd' as u8 {
-        let result = try!(bdict_decode(bytes));
-        Ok(Bencode::BDict(BDict(result.0)))
+    } else if bytes[*position] == 'd' as u8 {
+        let result = try!(bdict_decode(bytes, position));
+        Ok(Bencode::BDict(result))
     } else {
-        let result = try!(bstring_decode(bytes)).0;
+        let result = try!(bstring_decode(bytes, position));
         Ok(Bencode::BString(result))
     }
 }
 
-pub fn bstring_decode(bytes: Vec<u8>) -> Result<(BString, Vec<u8>), DecodeError> {
-    let mut length_str = String::new();
-    let mut position = 0u64;
-    if bytes.len() > 0 && (bytes[0] as char).is_digit(10) {
-        'topl: for ch in &bytes {
-            position += 1;
-            if (*ch as char) == ':' {
-                for byte in &bytes {
-                    if (*byte as char) != ':' {
-                        length_str.push((*byte as char));
-                    } else {
-                        break 'topl;
-                    }
-                }
-            }
-        }
-    } else {
+pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString, DecodeError> {
+    let mut position = *position_arg;
+    if !(bytes[position] as char).is_numeric() {
         return Err(DecodeError {
-            position: Some(position),
+            position: None,
             kind: DecodeErrorKind::InvalidString,
         });
     }
-    let length_int = try!(length_str.parse::<usize>());
-    let string_data = &bytes[length_str.len() + 1..(length_int + length_str.len()) + 1];
-    let remaining = bytes[string_data.len() + length_str.len() + 1..].to_vec();
-    let bstring = BString::new(string_data);
-    Ok((bstring, remaining))
+    while (bytes[position] as char).is_numeric() {
+        position += 1;
+    }
+    let len = &String::from_utf8(bytes[*position_arg..position]
+        .iter()
+        .map(|&x| x)
+        .collect::<Vec<u8>>()
+    ).unwrap().parse::<usize>().unwrap();
+    if bytes[position] != ':' as u8 {
+        return Err(DecodeError {
+            position: None,
+            kind: DecodeErrorKind::InvalidString,
+        });
+
+    }
+    position += 1;
+    let str_bytes = bytes[position..(position + len)].iter().map(|&x| x).collect::<Vec<u8>>();
+    *position_arg = position + len;
+    Ok(BString(str_bytes))
 }
 
-pub fn bint_decode(bytes: Vec<u8>) -> Result<BInt, DecodeError> {
+pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, DecodeError> {
+    let mut position = *position_arg;
     let mut number_string = String::new();
     if bytes.len() > 1 {
-        if (bytes[0] as char) == 'i' {
-            match bytes[1] as char {
+        if (bytes[position] as char) == 'i' {
+            position += 1;
+            match bytes[position] as char {
                 '0' => {
-                    if bytes.len() >= 2 && (bytes[2] as char) == 'e' {
+                    if bytes.len() >= 2 && (bytes[position + 1] as char) == 'e' {
+                        *position_arg = *position_arg + 3;
                         return Ok(BInt::new(0i64));
                     } else {
                         return Err(DecodeError {
@@ -68,7 +71,7 @@ pub fn bint_decode(bytes: Vec<u8>) -> Result<BInt, DecodeError> {
                     }
                 }
                 _ => {
-                    for i in &bytes[1..bytes.len()] {
+                    for i in &bytes[position..bytes.len()] {
                         if (*i as char) != 'e' {
                             number_string.push(*i as char);
                         } else {
@@ -99,59 +102,48 @@ pub fn bint_decode(bytes: Vec<u8>) -> Result<BInt, DecodeError> {
 
     let parsint = try!(number_string.parse::<i64>());
     let number = BInt::new(parsint);
+    *position_arg += number_string.len() + 2;
     Ok(number)
 }
 
-pub fn blist_decode(bytes: Vec<u8>) -> Result<BList, DecodeError> {
+pub fn blist_decode(bytes: &[u8], position: &mut usize) -> Result<BList, DecodeError> {
     let mut result_list = BList::new();
     let mut bytes = bytes;
+    let mut list = Vec::new();
     if bytes.len() > 1 {
-        loop {
-            if (bytes[0] as char) == 'l' {
-                match bytes[1] as char {
-                    'e' => return Ok(result_list),
-                    'i' => {
-                        let bint = try!(bint_decode(bytes[1..bytes.len()].to_vec()));
-                        result_list.push(Bencode::BInt(bint));
-                    }
-                    'l' => {
-                        let blist = try!(blist_decode(bytes[1..bytes.len()].to_vec()));
-                        result_list.push(Bencode::BList(blist));
-                    }
-                    'd' => {
-                        let bdict = try!(bdict_decode(bytes[1..bytes.len()].to_vec()));
-                    }
-                    _ => {
-                        // Most likely a bencoded string
-                        if (bytes[1] as char).is_digit(10) {
-                            let bstring = try!(bstring_decode(bytes[1..bytes.len()].to_vec()));
-                            result_list.push(Bencode::BString(bstring.0));
-                            bytes = bstring.1;
-                            bytes.insert(0, 'l' as u8);
-                        } else {
-                            return Err(DecodeError {
-                                position: None,
-                                kind: DecodeErrorKind::UnknownType,
-                            });
-                        }
-                    }
-                }
-            } else {
-                return Err(DecodeError {
-                    position: None,
-                    kind: DecodeErrorKind::ExpectedByte('l'),
-                });
-            }
+        if bytes[*position] != 'l' as u8 {
+            return Err(DecodeError {
+                position: None,
+                kind: DecodeErrorKind::ExpectedByte('l'),
+            });
         }
+        *position += 1;
+        while *position < bytes.len() && bytes[*position] != 'e' as u8 {
+            let result = try!(belement_decode(bytes, position));
+            list.push(result); 
+        }
+        if *position >= bytes.len() {
+            return Err(DecodeError {
+                position: None,
+                kind: DecodeErrorKind::EndOfStream,
+            });
+
+        }
+        if bytes[*position] != 'e' as u8 {
+            return Err(DecodeError {
+                position: None,
+                kind: DecodeErrorKind::ExpectedByte('e'),
+            });
+        }
+        Ok(BList(list))
     } else {
         return Err(DecodeError {
             position: None,
             kind: DecodeErrorKind::EndOfStream,
         });
     }
-    Ok(result_list)
 }
 
-pub fn bdict_decode(bytes: Vec<u8>) -> Result<BDict, DecodeError> {
+pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeError> {
     unimplemented!();
 }

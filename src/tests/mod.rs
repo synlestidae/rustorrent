@@ -9,7 +9,7 @@ pub fn test_decodes_int_0() {
 
 #[test]
 pub fn test_negative_zero_not_decoded() {
-    assert!(!bint_decode("i-0e".to_string().into_bytes()).is_ok());
+    assert!(!bint_decode(&"i-0e".to_string().into_bytes(), &mut 0).is_ok());
 }
 
 #[test]
@@ -64,12 +64,12 @@ pub fn test_decodes_hello_world_string() {
 
 #[cfg(test)]
 fn decode_str_to_i64(s: &str) -> i64 {
-    let result = bint_decode(s.to_string().into_bytes());
+    let result = bint_decode(&s.to_string().into_bytes(), &mut 0);
     result.ok().unwrap().to_i64()
 }
 
 #[cfg(test)]
 fn test_decode_str(expected: &str, actual: &str) {
-    let bstring = bstring_decode(actual.to_string().into_bytes()).ok().unwrap().0;
+    let bstring = bstring_decode(&actual.to_string().into_bytes(), &mut 0).ok().unwrap();
     assert_eq!(expected.to_string(), bstring.to_string().ok().unwrap());
 }
