@@ -66,8 +66,8 @@ pub fn test_decodes_hello_world_string() {
 #[test]
 pub fn test_decodes_dict() {
     let dict = bdict_decode(&"d3:cow3:moo4:spam4:eggse".to_string().into_bytes(), &mut 0).unwrap();
-    println!("dict {:?}", dict);
-    assert_eq!(dict.get("cow").unwrap(), &Bencode::BString(BString::from_str("moo")));
+    assert_eq!(dict.get("cow").unwrap(),
+               &Bencode::BString(BString::from_str("moo")));
 }
 
 #[cfg(test)]

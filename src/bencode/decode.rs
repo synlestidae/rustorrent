@@ -4,12 +4,12 @@ use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind
 pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, DecodeError> {
     if bytes.len() == 0 || *position >= bytes.len() {
         return Err(DecodeError {
-                position: Some(*position as u64),
-                kind: DecodeErrorKind::EndOfStream,
+            position: Some(*position as u64),
+            kind: DecodeErrorKind::EndOfStream,
         });
     }
 
-    if bytes[*position] == 'i' as u8 { 
+    if bytes[*position] == 'i' as u8 {
         let result = try!(bint_decode(bytes, position));
         Ok(Bencode::BInt(result))
     } else if bytes[*position] == 'l' as u8 {
@@ -27,7 +27,6 @@ pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, De
 pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString, DecodeError> {
     let mut position = *position_arg;
     if !(bytes[position] as char).is_numeric() {
-        println!("Error of numerics");
         return Err(DecodeError {
             position: Some(position as u64),
             kind: DecodeErrorKind::InvalidString,
@@ -37,12 +36,13 @@ pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString,
         position += 1;
     }
     let len = &String::from_utf8(bytes[*position_arg..position]
-        .iter()
-        .map(|&x| x)
-        .collect::<Vec<u8>>()
-    ).unwrap().parse::<usize>().unwrap();
+            .iter()
+            .map(|&x| x)
+            .collect::<Vec<u8>>())
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
     if bytes[position] != ':' as u8 {
-        println!("Error of colon");
         return Err(DecodeError {
             position: Some(position as u64),
             kind: DecodeErrorKind::InvalidString,
@@ -121,7 +121,7 @@ pub fn blist_decode(bytes: &[u8], position: &mut usize) -> Result<BList, DecodeE
         *position += 1;
         while *position < bytes.len() && bytes[*position] != 'e' as u8 {
             let result = try!(belement_decode(bytes, position));
-            list.push(result); 
+            list.push(result);
         }
         if *position >= bytes.len() {
             return Err(DecodeError {
@@ -154,25 +154,21 @@ pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeE
     } else if bytes.len() < 2 {
         return Err(DecodeError {
             position: Some(1),
-            kind: DecodeErrorKind::EndOfStream
+            kind: DecodeErrorKind::EndOfStream,
         });
     }
     let mut map = BTreeMap::new();
     *position += 1;
     while *position < bytes.len() && bytes[*position] != 'e' as u8 {
         let s_position = *position;
-        println!("Getting the possy {}", *position);
         let key = try!(bstring_decode(bytes, position));
-        println!("'{}' Getting the valley {}", key, *position,);
         let value = try!(belement_decode(bytes, position));
-        println!("{} {}", value, *position);
         match key.to_string() {
             Ok(_) => map.insert(key, value),
             Err(e) => {
-                println!("Error: {}", e);
                 return Err(DecodeError {
                     position: Some(s_position as u64),
-                    kind: DecodeErrorKind::InvalidString
+                    kind: DecodeErrorKind::InvalidString,
                 });
             }
         };

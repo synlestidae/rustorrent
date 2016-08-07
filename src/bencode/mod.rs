@@ -16,7 +16,7 @@ pub struct BList(Vec<Bencode>);
 #[derive(Eq, PartialEq, Debug)]
 pub struct BDict(BTreeMap<BString, Bencode>);
 
-//Makes it easier to access elements of BDict
+// Makes it easier to access elements of BDict
 impl BDict {
     pub fn get<'b>(&'b self, _key: &str) -> Option<&'b Bencode> {
         let s_bytes = _key.to_string().into_bytes();
