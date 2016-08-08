@@ -26,29 +26,32 @@ pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, De
 
 pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString, DecodeError> {
     let mut position = *position_arg;
-    if !(bytes[position] as char).is_numeric() {
+    const ASCII_HEX_ZERO: u8 = 0x30;
+    const ASCII_HEX_NINE: u8 = 0x39;
+
+    if !(ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= ASCII_HEX_NINE) {
         return Err(DecodeError {
-            position: Some(position ),
+            position: Some(position),
             kind: DecodeErrorKind::InvalidString,
         });
     }
-    while (bytes[position] as char).is_numeric() {
+
+    while ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= 0x39 {
         position += 1;
     }
-    let len = &String::from_utf8(bytes[*position_arg..position]
-            .iter()
-            .map(|&x| x)
-            .collect::<Vec<u8>>())
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
     if bytes[position] != ':' as u8 {
         return Err(DecodeError {
-            position: Some(position ),
+            position: Some(position),
             kind: DecodeErrorKind::InvalidString,
         });
 
     }
+
+    let len_string = try!(String::from_utf8(bytes[*position_arg..position]
+        .iter()
+        .map(|&x| x)
+        .collect::<Vec<u8>>()));
+    let len = len_string.parse::<usize>().unwrap();
     position += 1;
     let str_bytes = bytes[position..(position + len)].iter().map(|&x| x).collect::<Vec<u8>>();
     *position_arg = position + len;
@@ -68,7 +71,7 @@ pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, Decod
                         return Ok(BInt::new(0i64));
                     } else {
                         return Err(DecodeError {
-                            position: Some(*position_arg ),
+                            position: Some(*position_arg),
                             kind: DecodeErrorKind::ExpectedByte('e'),
                         });
                     }
@@ -165,9 +168,9 @@ pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeE
         let value = try!(belement_decode(bytes, position));
         match key.to_string() {
             Ok(_) => map.insert(key, value),
-            Err(e) => {
+            Err(_) => {
                 return Err(DecodeError {
-                    position: Some(s_position ),
+                    position: Some(s_position),
                     kind: DecodeErrorKind::InvalidString,
                 });
             }

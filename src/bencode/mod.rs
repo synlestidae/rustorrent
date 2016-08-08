@@ -85,7 +85,7 @@ pub enum DecodeErrorKind {
     UnknownType,
     IntParsingErr(ParseIntError),
     IntNegativeZero,
-    Utf8Err(FromUtf8Error)
+    Utf8Err(FromUtf8Error),
 }
 
 impl fmt::Display for Bencode {
@@ -172,6 +172,15 @@ impl From<ParseIntError> for DecodeError {
         DecodeError {
             position: None,
             kind: IntParsingErr(intperr),
+        }
+    }
+}
+
+impl From<FromUtf8Error> for DecodeError {
+    fn from(utf8err: FromUtf8Error) -> DecodeError {
+        DecodeError {
+            position: None,
+            kind: Utf8Err(utf8err),
         }
     }
 }
