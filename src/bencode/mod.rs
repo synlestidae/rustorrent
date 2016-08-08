@@ -73,7 +73,7 @@ pub enum Bencode {
 
 #[derive(Debug)]
 pub struct DecodeError {
-    position: Option<u64>,
+    position: Option<usize>,
     kind: DecodeErrorKind,
 }
 

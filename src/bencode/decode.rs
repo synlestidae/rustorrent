@@ -4,7 +4,7 @@ use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind
 pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, DecodeError> {
     if bytes.len() == 0 || *position >= bytes.len() {
         return Err(DecodeError {
-            position: Some(*position as u64),
+            position: Some(*position),
             kind: DecodeErrorKind::EndOfStream,
         });
     }
@@ -28,7 +28,7 @@ pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString,
     let mut position = *position_arg;
     if !(bytes[position] as char).is_numeric() {
         return Err(DecodeError {
-            position: Some(position as u64),
+            position: Some(position ),
             kind: DecodeErrorKind::InvalidString,
         });
     }
@@ -44,7 +44,7 @@ pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString,
         .unwrap();
     if bytes[position] != ':' as u8 {
         return Err(DecodeError {
-            position: Some(position as u64),
+            position: Some(position ),
             kind: DecodeErrorKind::InvalidString,
         });
 
@@ -68,7 +68,7 @@ pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, Decod
                         return Ok(BInt::new(0i64));
                     } else {
                         return Err(DecodeError {
-                            position: Some(*position_arg as u64),
+                            position: Some(*position_arg ),
                             kind: DecodeErrorKind::ExpectedByte('e'),
                         });
                     }
@@ -167,7 +167,7 @@ pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeE
             Ok(_) => map.insert(key, value),
             Err(e) => {
                 return Err(DecodeError {
-                    position: Some(s_position as u64),
+                    position: Some(s_position ),
                     kind: DecodeErrorKind::InvalidString,
                 });
             }
