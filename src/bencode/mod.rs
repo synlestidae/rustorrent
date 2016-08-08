@@ -85,6 +85,7 @@ pub enum DecodeErrorKind {
     UnknownType,
     IntParsingErr(ParseIntError),
     IntNegativeZero,
+    Utf8Err(FromUtf8Error)
 }
 
 impl fmt::Display for Bencode {
@@ -143,6 +144,7 @@ impl fmt::Display for DecodeError {
             UnknownType => write!(f, "type not recognised as bencoded"),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
             IntNegativeZero => write!(f, "-0 is not a valid integer"),
+            Utf8Err(ref u8e) => write!(f, "{}", u8e),
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
@@ -160,6 +162,7 @@ impl error::Error for DecodeError {
             UnknownType => "cannot parse as a valid bencoded type",
             IntParsingErr(..) => "failed to parse integer",
             IntNegativeZero => "-0 is not a valid integer",
+            Utf8Err(..) => "failed with an utf8error",
         }
     }
 }
