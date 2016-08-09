@@ -1,35 +1,37 @@
 use std::collections::BTreeMap;
 use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind};
 
-pub fn belement_decode(bytes: &[u8], position: &mut usize) -> Result<Bencode, DecodeError> {
-    if bytes.len() == 0 || *position >= bytes.len() {
+pub struct DecodeResult<T>(pub T, pub usize);
+
+pub fn belement_decode(bytes: &[u8]) -> Result<DecodeResult<Bencode>, DecodeError> {
+    if bytes.len() == 0 {
         return Err(DecodeError {
-            position: Some(*position),
+            position: Some(0),
             kind: DecodeErrorKind::EndOfStream,
         });
     }
-
-    if bytes[*position] == 'i' as u8 {
-        let result = try!(bint_decode(bytes, position));
-        Ok(Bencode::BInt(result))
-    } else if bytes[*position] == 'l' as u8 {
-        let result = try!(blist_decode(bytes, position));
-        Ok(Bencode::BList(result))
-    } else if bytes[*position] == 'd' as u8 {
-        let result = try!(bdict_decode(bytes, position));
-        Ok(Bencode::BDict(result))
+    
+    Ok(if bytes[0] == 'i' as u8 {
+        let result = try!(bint_decode(bytes));
+        DecodeResult(Bencode::BInt(result.0), result.1)
+    } else if bytes[0] == 'l' as u8 {
+        let result = try!(blist_decode(bytes));
+        DecodeResult(Bencode::BList(result.0), result.1)
+    } else if bytes[0] == 'd' as u8 {
+        let result = try!(bdict_decode(bytes));
+        DecodeResult(Bencode::BDict(result.0), result.1)
     } else {
-        let result = try!(bstring_decode(bytes, position));
-        Ok(Bencode::BString(result))
-    }
+        let result = try!(bstring_decode(bytes));
+        DecodeResult(Bencode::BString(result.0), result.1)
+    })
 }
 
-pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString, DecodeError> {
-    let mut position = *position_arg;
+pub fn bstring_decode(bytes: &[u8]) -> Result<DecodeResult<BString>, DecodeError> {
+    let mut position = 0;
     const ASCII_HEX_ZERO: u8 = 0x30;
     const ASCII_HEX_NINE: u8 = 0x39;
 
-    if !(ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= ASCII_HEX_NINE) {
+    if !(ASCII_HEX_ZERO <= bytes[0] && bytes[0] <= ASCII_HEX_NINE) {
         return Err(DecodeError {
             position: Some(position),
             kind: DecodeErrorKind::InvalidString,
@@ -39,6 +41,7 @@ pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString,
     while ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= 0x39 {
         position += 1;
     }
+
     if bytes[position] != ':' as u8 {
         return Err(DecodeError {
             position: Some(position),
@@ -47,19 +50,19 @@ pub fn bstring_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BString,
 
     }
 
-    let len_string = try!(String::from_utf8(bytes[*position_arg..position]
+    let len_string = try!(String::from_utf8(bytes[0..position]
         .iter()
         .map(|&x| x)
         .collect::<Vec<u8>>()));
     let len = len_string.parse::<usize>().unwrap();
     position += 1;
     let str_bytes = bytes[position..(position + len)].iter().map(|&x| x).collect::<Vec<u8>>();
-    *position_arg = position + len;
-    Ok(BString(str_bytes))
+    position = position + len;
+    Ok(DecodeResult(BString(str_bytes), position))
 }
 
-pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, DecodeError> {
-    let mut position = *position_arg;
+pub fn bint_decode(bytes: &[u8]) -> Result<DecodeResult<BInt>, DecodeError> {
+    let mut position = 0;
     let mut number_string = String::new();
     if bytes.len() > 1 {
         if (bytes[position] as char) == 'i' {
@@ -67,11 +70,11 @@ pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, Decod
             match bytes[position] as char {
                 '0' => {
                     if bytes.len() >= 2 && (bytes[position + 1] as char) == 'e' {
-                        *position_arg = *position_arg + 3;
-                        return Ok(BInt::new(0i64));
+                        position = position + 3;
+                        return Ok(DecodeResult(BInt::new(0i64), position));
                     } else {
                         return Err(DecodeError {
-                            position: Some(*position_arg),
+                            position: Some(position),
                             kind: DecodeErrorKind::ExpectedByte('e'),
                         });
                     }
@@ -108,38 +111,40 @@ pub fn bint_decode(bytes: &[u8], position_arg: &mut usize) -> Result<BInt, Decod
 
     let parsint = try!(number_string.parse::<i64>());
     let number = BInt::new(parsint);
-    *position_arg += number_string.len() + 2;
-    Ok(number)
+    position += number_string.len() + 2;
+    Ok(DecodeResult(number, position))
 }
 
-pub fn blist_decode(bytes: &[u8], position: &mut usize) -> Result<BList, DecodeError> {
+pub fn blist_decode(bytes: &[u8]) -> Result<DecodeResult<BList>, DecodeError> {
+    let mut position = 0;
     let mut list = Vec::new();
     if bytes.len() > 1 {
-        if bytes[*position] != 'l' as u8 {
+        if bytes[position] != 'l' as u8 {
             return Err(DecodeError {
                 position: None,
                 kind: DecodeErrorKind::ExpectedByte('l'),
             });
         }
-        *position += 1;
-        while *position < bytes.len() && bytes[*position] != 'e' as u8 {
-            let result = try!(belement_decode(bytes, position));
-            list.push(result);
+        position += 1;
+        while position < bytes.len() && bytes[position] != 'e' as u8 {
+            let result = try!(belement_decode(&bytes[position..bytes.len()]));
+            position += result.1;
+            list.push(result.0);
         }
-        if *position >= bytes.len() {
+        if position >= bytes.len() {
             return Err(DecodeError {
                 position: None,
                 kind: DecodeErrorKind::EndOfStream,
             });
 
         }
-        if bytes[*position] != 'e' as u8 {
+        if bytes[position] != 'e' as u8 {
             return Err(DecodeError {
                 position: None,
                 kind: DecodeErrorKind::ExpectedByte('e'),
             });
         }
-        Ok(BList(list))
+        Ok(DecodeResult(BList(list), position))
     } else {
         return Err(DecodeError {
             position: None,
@@ -148,8 +153,9 @@ pub fn blist_decode(bytes: &[u8], position: &mut usize) -> Result<BList, DecodeE
     }
 }
 
-pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeError> {
-    if bytes[*position] != 'd' as u8 {
+pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
+    let mut position = 0;
+    if bytes[position] != 'd' as u8 {
         return Err(DecodeError {
             position: Some(0),
             kind: DecodeErrorKind::ExpectedByte('d'),
@@ -161,13 +167,15 @@ pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeE
         });
     }
     let mut map = BTreeMap::new();
-    *position += 1;
-    while *position < bytes.len() && bytes[*position] != 'e' as u8 {
-        let s_position = *position;
-        let key = try!(bstring_decode(bytes, position));
-        let value = try!(belement_decode(bytes, position));
-        match key.to_string() {
-            Ok(_) => map.insert(key, value),
+    position += 1;
+    while position < bytes.len() && bytes[position] != 'e' as u8 {
+        let s_position = position;
+        let key = try!(bstring_decode(&bytes[position..bytes.len()]));
+        position += key.1;
+        let value = try!(belement_decode(&bytes[position..bytes.len()]));
+        position += value.1;
+        match key.0.to_string() {
+            Ok(_) => map.insert(key.0, value.0),
             Err(_) => {
                 return Err(DecodeError {
                     position: Some(s_position),
@@ -176,5 +184,5 @@ pub fn bdict_decode(bytes: &[u8], position: &mut usize) -> Result<BDict, DecodeE
             }
         };
     }
-    Ok(BDict(map))
+    Ok(DecodeResult(BDict(map), position))
 }
