@@ -2,20 +2,36 @@ use std::collections::BTreeMap;
 use std::{error, fmt};
 use std::string::FromUtf8Error;
 use std::num::ParseIntError;
-
 use self::DecodeErrorKind::*;
 
 pub mod decode;
 pub mod encode;
 
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub struct BString(Vec<u8>);
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub struct BInt(i64);
+#[derive(Eq, PartialEq)]
 pub struct BList(Vec<Bencode>);
+#[derive(Eq, PartialEq, Debug)]
 pub struct BDict(BTreeMap<BString, Bencode>);
+
+// Makes it easier to access elements of BDict
+impl BDict {
+    pub fn get<'b>(&'b self, _key: &str) -> Option<&'b Bencode> {
+        let s_bytes = _key.to_string().into_bytes();
+        let key = BString::new(&s_bytes);
+        self.0.get(&key)
+    }
+}
 
 impl BString {
     pub fn new(bytes: &[u8]) -> BString {
         BString(bytes.to_vec())
+    }
+
+    pub fn from_str(s: &str) -> BString {
+        BString(s.to_string().into_bytes())
     }
 
     pub fn to_string(&self) -> Result<String, FromUtf8Error> {
@@ -38,12 +54,16 @@ impl BList {
         let vector: Vec<Bencode> = Vec::new();
         BList(vector)
     }
+    pub fn from(src_list: Vec<Bencode>) -> BList {
+        BList(src_list)
+    }
 
     pub fn push(&mut self, value: Bencode) {
         self.0.push(value);
     }
 }
 
+#[derive(Eq, PartialEq)]
 pub enum Bencode {
     BString(BString),
     BInt(BInt),
@@ -53,7 +73,7 @@ pub enum Bencode {
 
 #[derive(Debug)]
 pub struct DecodeError {
-    position: Option<u64>,
+    position: Option<usize>,
     kind: DecodeErrorKind,
 }
 
@@ -65,6 +85,7 @@ pub enum DecodeErrorKind {
     UnknownType,
     IntParsingErr(ParseIntError),
     IntNegativeZero,
+    Utf8Err(FromUtf8Error),
 }
 
 impl fmt::Display for Bencode {
@@ -123,6 +144,7 @@ impl fmt::Display for DecodeError {
             UnknownType => write!(f, "type not recognised as bencoded"),
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
             IntNegativeZero => write!(f, "-0 is not a valid integer"),
+            Utf8Err(ref u8e) => write!(f, "{}", u8e),
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
@@ -140,6 +162,7 @@ impl error::Error for DecodeError {
             UnknownType => "cannot parse as a valid bencoded type",
             IntParsingErr(..) => "failed to parse integer",
             IntNegativeZero => "-0 is not a valid integer",
+            Utf8Err(..) => "failed with an utf8error",
         }
     }
 }
@@ -149,6 +172,15 @@ impl From<ParseIntError> for DecodeError {
         DecodeError {
             position: None,
             kind: IntParsingErr(intperr),
+        }
+    }
+}
+
+impl From<FromUtf8Error> for DecodeError {
+    fn from(utf8err: FromUtf8Error) -> DecodeError {
+        DecodeError {
+            position: None,
+            kind: Utf8Err(utf8err),
         }
     }
 }

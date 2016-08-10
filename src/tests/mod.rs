@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
-use bencode::BString;
-use bencode::decode::{bint_decode, bstring_decode};
+use bencode::{BString, Bencode};
+#[allow(unused_imports)]
+use bencode::decode::{bint_decode, bstring_decode, bdict_decode, DecodeResult};
 
 #[test]
 pub fn test_decodes_int_0() {
@@ -9,7 +10,7 @@ pub fn test_decodes_int_0() {
 
 #[test]
 pub fn test_negative_zero_not_decoded() {
-    assert!(!bint_decode("i-0e".to_string().into_bytes()).is_ok());
+    assert!(!bint_decode(&"i-0e".to_string().into_bytes()).is_ok());
 }
 
 #[test]
@@ -51,7 +52,7 @@ pub fn test_decodes_int_neg_11() {
 pub fn test_decodes_32bit_integer_range() {
     let step = 21481;
     let mut i = i32::min_value();
-    while (i <= i32::max_value() - step) {
+    while i <= i32::max_value() - step {
         assert_eq!(decode_str_to_i64(&format!("i{}e", i)), i as i64);
         i += step;
     }
@@ -62,14 +63,21 @@ pub fn test_decodes_hello_world_string() {
     test_decode_str("Hello, world!", "13:Hello, world!");
 }
 
+#[test]
+pub fn test_decodes_dict() {
+    let dict = bdict_decode(&"d3:cow3:moo4:spam4:eggse".to_string().into_bytes()).unwrap().0;
+    assert_eq!(dict.get("cow").unwrap(),
+               &Bencode::BString(BString::from_str("moo")));
+}
+
 #[cfg(test)]
 fn decode_str_to_i64(s: &str) -> i64 {
-    let result = bint_decode(s.to_string().into_bytes());
-    result.ok().unwrap().to_i64()
+    let result = bint_decode(&s.to_string().into_bytes());
+    result.ok().unwrap().0.to_i64()
 }
 
 #[cfg(test)]
 fn test_decode_str(expected: &str, actual: &str) {
-    let bstring = bstring_decode(actual.to_string().into_bytes()).ok().unwrap().0;
+    let bstring = bstring_decode(&actual.to_string().into_bytes()).ok().unwrap().0;
     assert_eq!(expected.to_string(), bstring.to_string().ok().unwrap());
 }
