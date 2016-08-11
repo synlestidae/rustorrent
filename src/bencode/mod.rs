@@ -7,7 +7,7 @@ use self::DecodeErrorKind::*;
 pub mod decode;
 pub mod encode;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct BString(Vec<u8>);
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub struct BInt(i64);
@@ -32,6 +32,10 @@ impl BString {
 
     pub fn from_str(s: &str) -> BString {
         BString(s.to_string().into_bytes())
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.clone()
     }
 
     pub fn to_string(&self) -> Result<String, FromUtf8Error> {
@@ -60,6 +64,10 @@ impl BList {
 
     pub fn push(&mut self, value: Bencode) {
         self.0.push(value);
+    }
+
+    pub fn list<'a>(&'a self) -> &'a Vec<Bencode> {
+        &self.0
     }
 }
 
@@ -92,9 +100,9 @@ impl fmt::Display for Bencode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Bencode::BString(ref s) => write!(f, "{}", s),
-            Bencode::BInt(..) => write!(f, "to be implemented"),
+            Bencode::BInt(BInt(bint)) => write!(f, "{}", bint),
             Bencode::BList(ref l) => write!(f, "{:?}", l),
-            Bencode::BDict(..) => write!(f, "to be implemented"),
+            Bencode::BDict(BDict(ref bdict_map)) => write!(f, "{:?}", bdict_map),
         }
     }
 }
@@ -107,7 +115,12 @@ impl fmt::Debug for Bencode {
 
 impl fmt::Display for BString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string().unwrap())
+        write!(f,
+               "{}",
+               match self.to_string() {
+                   Ok(string) => string,
+                   Err(_) => format!("{:?}", self.0),
+               })
     }
 }
 
