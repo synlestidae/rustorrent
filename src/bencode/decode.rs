@@ -142,7 +142,7 @@ pub fn blist_decode(bytes: &[u8]) -> Result<DecodeResult<BList>, DecodeError> {
                 list.push(result.0);
             }
         }
-      Ok(DecodeResult(BList(list), position))
+        Ok(DecodeResult(BList(list), position))
     } else {
         return Err(DecodeError {
             position: None,

@@ -1,10 +1,10 @@
-use bencode::{Bencode, BDict, BString};
+use bencode::{BDict, BString, BInt};
 use std::{error, fmt};
 
 #[derive(Default)]
 pub struct MetaInfo {
     pub announce: String,
-    pub announce_list: Vec<String>,
+    pub announce_list: Vec<Vec<String>>,
     pub comment: Option<String>,
     pub created_by: Option<String>,
     pub creation_date: Option<u32>,
@@ -60,127 +60,57 @@ pub enum MetaInfoErrorKind {
 impl MetaInfo {
     pub fn from(dict: &BDict) -> Result<MetaInfo, MetaInfoError> {
         let mut info: MetaInfo = Default::default();
-        info.announce = try!(MetaInfo::get_string_or_error(dict, "announce"));
-        info.announce_list = MetaInfo::get_vecstring(dict, "announce_list");
-        info.comment = MetaInfo::get_optionstring(dict, "comment");
-        info.created_by = MetaInfo::get_optionstring(dict, "created_by");
-        info.creation_date = MetaInfo::get_u32_or_error(dict, "creation date").ok();
+
+        let announce: Option<String> = dict.get_copy("announce");
+        let announce_list: Option<Vec<Vec<String>>> = dict.get_copy("announce_list");
+        let comment: Option<String> = dict.get_copy("comment");
+        let created_by: Option<String> = dict.get_copy("created_by");
+        let creation_date: Option<BInt> = dict.get_copy("creation date");
+
+        info.announce = try!(announce.ok_or(MetaInfoError::missing_field("annouce")));
+        info.announce_list = announce_list.unwrap_or(Vec::new());
+        info.comment = comment; //try!(comment.ok_or(MetaInfoError::missing_field("comment")));
+        info.created_by = created_by;
+        info.creation_date = creation_date.map(|bdict| bdict.to_i64() as u32);
         info.info = try!(MetaInfo::get_info(dict));
         Ok(info)
     }
 
-    fn get_string_or_error(dict: &BDict, field: &str) -> Result<String, MetaInfoError> {
-        match dict.get(field) {
-            Some(&Bencode::BString(ref bstring)) => {
-                let string = bstring.to_string();
-                if string.is_ok() {
-                    Ok(string.ok().unwrap())
-                } else {
-                    Err(MetaInfoError::field_type(field))
-                }
-            }
-            Some(_) => Err(MetaInfoError::field_type(field)),
-            None => Err(MetaInfoError::missing_field(field)),
-        }
-    }
-
-    fn get_bstring_or_error(dict: &BDict, field: &str) -> Result<BString, MetaInfoError> {
-        match dict.get(field) {
-            Some(&Bencode::BString(ref bstring)) => Ok(bstring.clone()),
-            Some(_) => Err(MetaInfoError::field_type(field)),
-            None => Err(MetaInfoError::missing_field(field)),
-        }
-    }
-
-    fn get_vecstring(dict: &BDict, field: &str) -> Vec<String> {
-        let mut list = Vec::new();
-        match dict.get(field) {
-            Some(&Bencode::BList(ref blist)) => {
-                for item in blist.list().iter() {
-                    match item {
-                        &Bencode::BString(ref bstring) => {
-                            let s = bstring.to_string();
-                            if s.is_ok() {
-                                list.push(s.ok().unwrap());
-                            }
-                        }
-                        _ => return vec![],
-                    }
-                }
-            }
-            _ => (),
-        }
-        list
-    }
-
-    fn get_optionstring(dict: &BDict, field: &str) -> Option<String> {
-        match dict.get(field) {
-            Some(&Bencode::BString(ref bstring)) => bstring.to_string().ok(),
-            _ => None,
-        }
-    }
-
-    fn get_u32_or_error(dict: &BDict, field: &str) -> Result<u32, MetaInfoError> {
-        match dict.get(field) {
-            Some(&Bencode::BInt(ref bint)) => Ok(bint.to_i64() as u32),
-            Some(_) => Err(MetaInfoError::field_type(field)),
-            None => Err(MetaInfoError::missing_field(field)),
-        }
-
-    }
-
-    fn get_u64_or_error(dict: &BDict, field: &str) -> Result<u64, MetaInfoError> {
-        match dict.get(field) {
-            Some(&Bencode::BInt(ref bint)) => Ok(bint.to_i64() as u64),
-            Some(_) => Err(MetaInfoError::field_type(field)),
-            None => Err(MetaInfoError::missing_field(field)),
-        }
-
-    }
-
-
     fn get_info(dict: &BDict) -> Result<FileInfo, MetaInfoError> {
         let mut info: FileInfo = Default::default();
-        let bdict: &BDict = match try!(dict.get("info")
-            .ok_or(MetaInfoError::missing_field("info"))) {
-            &Bencode::BDict(ref dict) => dict,
-            _ => return Err(MetaInfoError::field_type("info")),
-        };
-        info.piece_length = try!(MetaInfo::get_u64_or_error(bdict, "piece length"));
-        info.private = MetaInfo::get_u32_or_error(bdict, "private").ok();
-        let pieces = try!(MetaInfo::get_bstring_or_error(bdict, "pieces")).to_bytes();
+        let bdict: BDict = try!(dict.get_copy("info").ok_or(MetaInfoError::missing_field("info")));
+        info.piece_length = try!(bdict.get_copy("piece length").map(|pl: BInt| pl.to_i64() as u64).ok_or(MetaInfoError::missing_field("piece length")));
+        info.private = bdict.get_copy("private").map(|p: BInt| p.to_i64() as u32);
+        let pieces_bstr: BString = try!(bdict.get_copy("pieces").ok_or(MetaInfoError::missing_field("pieces")));
+        let pieces = pieces_bstr.to_bytes();
         let pieces_vec = (0..pieces.len() / 20)
             .map(|p| (&pieces[p..(p + 20)]).iter().map(|&b| b).collect())
             .collect::<Vec<SHA1Hash20b>>();
 
         info.pieces = pieces_vec;
-        info.name = try!(MetaInfo::get_string_or_error(bdict, "name"));
+        info.name = bdict.get_copy("name");
 
-        if let (Some(&Bencode::BString(ref md5sum)), Some(&Bencode::BInt(ref length))) =
-               (bdict.get("md5sum"), bdict.get("length")) {
+        let single_file_fields: (Option<BString>, Option<BInt>) = 
+            (bdict.get_copy("md5sum"), bdict.get_copy("length"));
+        if let (md5sum, Some(length)) = single_file_fields {
             info.mode_info = ModeInfo::Single(SingleFileInfo {
-                md5_sum: md5sum.to_bytes(),
+                md5_sum: md5sum.map(|m| m.to_bytes()),
                 length: length.to_i64() as u64,
             });
             return Ok(info);
-        };
-
-        if let Some(&Bencode::BList(ref flist)) = bdict.get("files") {
-            let mut files = Vec::new();
-            for fdict in flist.list() {
-                match fdict {
-                    &Bencode::BDict(ref bdict) => {
-                        let length = try!(MetaInfo::get_u64_or_error(bdict, "length"));
-                        let md5_sum = MetaInfo::get_bstring_or_error(bdict, "md5sum").ok().map(|b| b.to_bytes());
-                        let path = MetaInfo::get_vecstring(bdict, "path");
-                        files.push((length, md5_sum, path));
-                    }
-                    _ => return Err(MetaInfoError::field_type("files")),
-                }
-            }
-            info.mode_info = ModeInfo::Multi(MultiFileInfo { files: files });
         }
 
+        let bdict_files = bdict.get_copy("files");
+        let bdict_list: Vec<BDict> = try!(bdict_files.ok_or(MetaInfoError::missing_field("files")));
+        let mut files = Vec::new();
+        for fdict in bdict_list.into_iter() {
+             let length:BInt = try!(fdict.get_copy("length").ok_or(MetaInfoError::missing_field("length")));
+             let md5_sum = fdict.get_copy("md5sum").map(|m: BString| m.to_bytes());
+             let path: Vec<String> = try!(fdict.get_copy("path").ok_or(MetaInfoError::missing_field("path")));
+             files.push((length.to_i64() as u64, md5_sum, path));
+        }
+
+        info.mode_info = ModeInfo::Multi(MultiFileInfo { files: files });
         Ok(info)
     }
 }
@@ -190,7 +120,7 @@ pub struct FileInfo {
     piece_length: u64,
     pieces: Vec<SHA1Hash20b>,
     private: Option<u32>,
-    name: String,
+    name: Option<String>,
     mode_info: ModeInfo,
 }
 
@@ -208,7 +138,7 @@ impl Default for ModeInfo {
 #[derive(Debug, Default)]
 pub struct SingleFileInfo {
     pub length: u64,
-    pub md5_sum: MD5Sum,
+    pub md5_sum: Option<MD5Sum>,
 }
 
 #[derive(Debug, Default)]

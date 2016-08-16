@@ -74,11 +74,14 @@ pub fn test_decodes_dict() {
 
 #[test]
 pub fn test_decodes_dict_with_dict_field() {
-    let dict = bdict_decode(&"d4:listl4:worde3:cow3:moo4:spam4:eggse".to_string().into_bytes()).unwrap().0;
+    let dict =
+        bdict_decode(&"d4:listl4:worde3:cow3:moo4:spam4:eggse".to_string().into_bytes()).unwrap().0;
     let list = dict.get("list").unwrap();
     match list {
-        &Bencode::BList(ref blist) => assert_eq!(blist.list()[0], Bencode::BString(BString::from_str("word"))),
-        _ => panic!("Wrong thing: {:?}", list)
+        &Bencode::BList(ref blist) => {
+            assert_eq!(blist.list()[0], Bencode::BString(BString::from_str("word")))
+        }
+        _ => panic!("Wrong thing: {:?}", list),
     }
 }
 
@@ -90,14 +93,14 @@ pub fn test_decodes_dict_with_nested_list() {
         &Bencode::BList(ref blist) => {
             match blist.list()[0] {
                 Bencode::BList(ref blist) => assert_eq!(0, blist.list().len()),
-                _ => panic!("Wrong kind of thing!")
+                _ => panic!("Wrong kind of thing!"),
             }
-        },
-        _ => panic!("Wrong thing: {:?}", list)
+        }
+        _ => panic!("Wrong thing: {:?}", list),
     }
 }
 
-#[test] 
+#[test]
 pub fn test_decodes_list() {
     let list = blist_decode(&"ll1:e2:eeee".to_string().into_bytes()).unwrap();
 
@@ -113,13 +116,14 @@ pub fn test_decodes_list() {
 
 #[test]
 pub fn test_decodes_dict_with_nested_list_2() {
-    let dict = bdict_decode(&"d4:listll1:e2:eeee5:thing6:thing1e".to_string().into_bytes()).unwrap().0;
+    let dict =
+        bdict_decode(&"d4:listll1:e2:eeee5:thing6:thing1e".to_string().into_bytes()).unwrap().0;
     let list = dict.get("thing").unwrap();
     match list {
         &Bencode::BString(ref bstr) => {
             assert_eq!("thing1".to_string(), bstr.to_string().ok().unwrap());
-        },
-        _ => panic!("Wrong thing: {:?}", list)
+        }
+        _ => panic!("Wrong thing: {:?}", list),
     }
 }
 
