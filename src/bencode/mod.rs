@@ -3,25 +3,134 @@ use std::{error, fmt};
 use std::string::FromUtf8Error;
 use std::num::ParseIntError;
 use self::DecodeErrorKind::*;
+use std::convert::{From};
+use convert::TryFrom;
 
 pub mod decode;
 pub mod encode;
 
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct BString(Vec<u8>);
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct BInt(i64);
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub struct BList(Vec<Bencode>);
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct BDict(BTreeMap<BString, Bencode>);
+
+impl TryFrom<Bencode> for BInt {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        match element {
+            Bencode::BInt(bint) => Ok(bint),
+            _ => {
+                Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+            }
+        }
+    }
+}
+
+impl TryFrom<Bencode> for BString {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        match element {
+            Bencode::BString(belement) => Ok(belement),
+            _ => {
+                Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+            }
+        }
+    }
+}
+
+impl TryFrom<Bencode> for String {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        let error = DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                };
+
+        match element {
+            Bencode::BString(belement) => belement.to_string().map_err(|_| error),
+            _ => Err(error)
+        }
+    }
+}
+impl TryFrom<Bencode> for BDict {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        match element {
+            Bencode::BDict(belement) => Ok(belement),
+            _ => {
+                Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+            }
+        }
+    }
+}
+
+impl TryFrom<Bencode> for BList {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        match element {
+            Bencode::BList(belement) => Ok(belement),
+            _ => {
+                Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+            }
+        }
+    }
+}
+
+impl<A: TryFrom<Bencode>> TryFrom<Bencode> for Vec<A> {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Vec<A>, Self::Err> {
+        let mut result = Vec::new();
+        match element {
+            Bencode::BList(blist) => {
+                for item in blist.0.into_iter() {
+                    match A::try_from(item) {
+                        Ok(item_a) => result.push(item_a),
+                        _ => return Err(DecodeError {
+                            position: None,
+                            kind: DecodeErrorKind::ConversionError,
+                        })
+                    }
+                }
+                Ok(result)
+            },
+            _ => Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+        }
+    }
+}
+
 
 // Makes it easier to access elements of BDict
 impl BDict {
     pub fn get<'b>(&'b self, _key: &str) -> Option<&'b Bencode> {
         let s_bytes = _key.to_string().into_bytes();
-        let key = BString::new(&s_bytes);
-        self.0.get(&key)
+        let _key = BString::new(&s_bytes);
+        self.0.get(&_key)
+    }
+
+    pub fn get_copy<A: TryFrom<Bencode>>(&self, key: &str) -> Option<A> {
+        match self.get(key) {
+            Some(&ref element) => A::try_from(element.clone()).ok(),
+            _ => None
+        }
     }
 }
 
@@ -32,6 +141,10 @@ impl BString {
 
     pub fn from_str(s: &str) -> BString {
         BString(s.to_string().into_bytes())
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.clone()
     }
 
     pub fn to_string(&self) -> Result<String, FromUtf8Error> {
@@ -61,9 +174,13 @@ impl BList {
     pub fn push(&mut self, value: Bencode) {
         self.0.push(value);
     }
+
+    pub fn list<'a>(&'a self) -> &'a Vec<Bencode> {
+        &self.0
+    }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum Bencode {
     BString(BString),
     BInt(BInt),
@@ -86,15 +203,16 @@ pub enum DecodeErrorKind {
     IntParsingErr(ParseIntError),
     IntNegativeZero,
     Utf8Err(FromUtf8Error),
+    ConversionError,
 }
 
 impl fmt::Display for Bencode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Bencode::BString(ref s) => write!(f, "{}", s),
-            Bencode::BInt(..) => write!(f, "to be implemented"),
+            Bencode::BInt(BInt(bint)) => write!(f, "{}", bint),
             Bencode::BList(ref l) => write!(f, "{:?}", l),
-            Bencode::BDict(..) => write!(f, "to be implemented"),
+            Bencode::BDict(BDict(ref bdict_map)) => write!(f, "{:?}", bdict_map),
         }
     }
 }
@@ -107,7 +225,12 @@ impl fmt::Debug for Bencode {
 
 impl fmt::Display for BString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string().unwrap())
+        write!(f,
+               "{}",
+               match self.to_string() {
+                   Ok(string) => string,
+                   Err(_) => format!("{:?}", self.0),
+               })
     }
 }
 
@@ -145,6 +268,7 @@ impl fmt::Display for DecodeError {
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
             IntNegativeZero => write!(f, "-0 is not a valid integer"),
             Utf8Err(ref u8e) => write!(f, "{}", u8e),
+            ConversionError => write!(f, "cannot convert type")
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
@@ -163,6 +287,7 @@ impl error::Error for DecodeError {
             IntParsingErr(..) => "failed to parse integer",
             IntNegativeZero => "-0 is not a valid integer",
             Utf8Err(..) => "failed with an utf8error",
+            ConversionError => "failed to convert type"
         }
     }
 }

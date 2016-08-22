@@ -10,7 +10,7 @@ pub fn belement_decode(bytes: &[u8]) -> Result<DecodeResult<Bencode>, DecodeErro
             kind: DecodeErrorKind::EndOfStream,
         });
     }
-    
+
     Ok(if bytes[0] == 'i' as u8 {
         let result = try!(bint_decode(bytes));
         DecodeResult(Bencode::BInt(result.0), result.1)
@@ -31,7 +31,7 @@ pub fn bstring_decode(bytes: &[u8]) -> Result<DecodeResult<BString>, DecodeError
     const ASCII_HEX_ZERO: u8 = 0x30;
     const ASCII_HEX_NINE: u8 = 0x39;
 
-    if !(ASCII_HEX_ZERO <= bytes[0] && bytes[0] <= ASCII_HEX_NINE) {
+    if !(ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= ASCII_HEX_NINE) {
         return Err(DecodeError {
             position: Some(position),
             kind: DecodeErrorKind::InvalidString,
@@ -41,6 +41,7 @@ pub fn bstring_decode(bytes: &[u8]) -> Result<DecodeResult<BString>, DecodeError
     while ASCII_HEX_ZERO <= bytes[position] && bytes[position] <= 0x39 {
         position += 1;
     }
+
 
     if bytes[position] != ':' as u8 {
         return Err(DecodeError {
@@ -70,7 +71,7 @@ pub fn bint_decode(bytes: &[u8]) -> Result<DecodeResult<BInt>, DecodeError> {
             match bytes[position] as char {
                 '0' => {
                     if bytes.len() >= 2 && (bytes[position + 1] as char) == 'e' {
-                        position = position + 3;
+                        position = position + 2;
                         return Ok(DecodeResult(BInt::new(0i64), position));
                     } else {
                         return Err(DecodeError {
@@ -111,7 +112,7 @@ pub fn bint_decode(bytes: &[u8]) -> Result<DecodeResult<BInt>, DecodeError> {
 
     let parsint = try!(number_string.parse::<i64>());
     let number = BInt::new(parsint);
-    position += number_string.len() + 2;
+    position += number_string.len() + 1;
     Ok(DecodeResult(number, position))
 }
 
@@ -126,23 +127,20 @@ pub fn blist_decode(bytes: &[u8]) -> Result<DecodeResult<BList>, DecodeError> {
             });
         }
         position += 1;
-        while position < bytes.len() && bytes[position] != 'e' as u8 {
-            let result = try!(belement_decode(&bytes[position..bytes.len()]));
-            position += result.1;
-            list.push(result.0);
-        }
-        if position >= bytes.len() {
-            return Err(DecodeError {
-                position: None,
-                kind: DecodeErrorKind::EndOfStream,
-            });
-
-        }
-        if bytes[position] != 'e' as u8 {
-            return Err(DecodeError {
-                position: None,
-                kind: DecodeErrorKind::ExpectedByte('e'),
-            });
+        loop {
+            if position >= bytes.len() {
+                return Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::EndOfStream,
+                });
+            } else if bytes[position] == 'e' as u8 {
+                position += 1;
+                break;
+            } else {
+                let result = try!(belement_decode(&bytes[position..bytes.len()]));
+                position += result.1;
+                list.push(result.0);
+            }
         }
         Ok(DecodeResult(BList(list), position))
     } else {
@@ -168,21 +166,23 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
     }
     let mut map = BTreeMap::new();
     position += 1;
-    while position < bytes.len() && bytes[position] != 'e' as u8 {
-        let s_position = position;
-        let key = try!(bstring_decode(&bytes[position..bytes.len()]));
-        position += key.1;
-        let value = try!(belement_decode(&bytes[position..bytes.len()]));
-        position += value.1;
-        match key.0.to_string() {
-            Ok(_) => map.insert(key.0, value.0),
-            Err(_) => {
-                return Err(DecodeError {
-                    position: Some(s_position),
-                    kind: DecodeErrorKind::InvalidString,
-                });
-            }
-        };
+    loop {
+        if position >= bytes.len() {
+            return Err(DecodeError {
+                position: None,
+                kind: DecodeErrorKind::EndOfStream,
+            });
+        } else if bytes[position] == 'e' as u8 {
+            position += 1;
+            break;
+        } else {
+            let key = try!(bstring_decode(&bytes[position..bytes.len()]));
+            position += key.1;
+            let value_out = belement_decode(&bytes[position..bytes.len()]);
+            let value = try!(value_out);
+            position += value.1;
+            map.insert(key.0, value.0);
+        }
     }
     Ok(DecodeResult(BDict(map), position))
 }
