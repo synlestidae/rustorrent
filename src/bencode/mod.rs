@@ -190,8 +190,8 @@ pub enum Bencode {
 
 #[derive(Debug)]
 pub struct DecodeError {
-    position: Option<usize>,
-    kind: DecodeErrorKind,
+    pub position: Option<usize>,
+    pub kind: DecodeErrorKind,
 }
 
 #[derive(Debug)]
@@ -204,6 +204,7 @@ pub enum DecodeErrorKind {
     IntNegativeZero,
     Utf8Err(FromUtf8Error),
     ConversionError,
+    MissingField(String)
 }
 
 impl fmt::Display for Bencode {
@@ -268,7 +269,8 @@ impl fmt::Display for DecodeError {
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
             IntNegativeZero => write!(f, "-0 is not a valid integer"),
             Utf8Err(ref u8e) => write!(f, "{}", u8e),
-            ConversionError => write!(f, "cannot convert type")
+            ConversionError => write!(f, "cannot convert type"),
+            MissingField(ref field) => write!(f, "required field '{}' is missing on dictionary", field)
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
@@ -287,7 +289,8 @@ impl error::Error for DecodeError {
             IntParsingErr(..) => "failed to parse integer",
             IntNegativeZero => "-0 is not a valid integer",
             Utf8Err(..) => "failed with an utf8error",
-            ConversionError => "failed to convert type"
+            ConversionError => "failed to convert type",
+            MissingField(..) => "required field is missing"
         }
     }
 }
