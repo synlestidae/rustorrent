@@ -33,6 +33,25 @@ impl TryFrom<Bencode> for BInt {
     }
 }
 
+/*impl TryFrom<Bencode> for String {
+    type Err = DecodeError;
+    fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+        match element {
+            Bencode::BString(belement) => belement.to_string().map_err(|_| DecodeError {
+                position: None, 
+                kind: DecodeErrorKind::ConversionError
+            }),
+            _ => {
+                Err(DecodeError {
+                    position: None,
+                    kind: DecodeErrorKind::ConversionError,
+                })
+            }
+        }
+    }
+
+}*/
+
 impl TryFrom<Bencode> for BString {
     type Err = DecodeError;
     fn try_from(element: Bencode) -> Result<Self, Self::Err> {
