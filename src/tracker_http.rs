@@ -21,6 +21,7 @@ impl HttpTrackerHandler {
 
 impl TrackerHandler for HttpTrackerHandler {
     fn request(_: &TrackerReq) -> TrackerResp {
+        let mut url = self.url.clone();
         unimplemented!()
     }
 }

@@ -19,6 +19,12 @@ pub struct TrackerReq {
     pub trackerid: Option<String>,
 }
 
+impl TrackerReq {
+    pub to_query_string_pairs(&self) -> Vec<(String, String>) {
+        unimplemented!();
+    }
+}
+
 fn missing_field(fld: &str) -> DecodeError {
     DecodeError {
         position: None,
