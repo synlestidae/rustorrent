@@ -1,4 +1,4 @@
-use tracker::{TrackerReq, TrackerResp};
+use tracker::data::{TrackerReq, TrackerResp};
 use bencode::Bencode;
 use bencode::decode::{belement_decode, DecodeResult};
 use hyper::Url;
