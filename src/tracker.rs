@@ -3,6 +3,7 @@ use convert::TryFrom;
 use metainfo::SHA1Hash20b;
 use bencode::{BDict, BString, BInt, BList, DecodeError, DecodeErrorKind};
 use std::str::FromStr;
+use std::string::ToString;
 
 pub struct TrackerReq {
     pub info_hash: SHA1Hash20b,
@@ -19,10 +20,35 @@ pub struct TrackerReq {
     pub trackerid: Option<String>,
 }
 
-impl TrackerReq {
-    pub to_query_string_pairs(&self) -> Vec<(String, String>) {
-        unimplemented!();
+fn url_encode(bytes: &[u8]) -> String {
+    let mut string = String::new();
+    for &byte in bytes {
+        if ('a' as u8 <= byte && byte <= 'z' as u8) || ('A' as u8 <= byte && byte <= 'Z' as u8) 
+            || ('0' as u8 <= byte && byte <= '9' as u8) || byte == '.' as u8 || byte == '-' as u8 || byte == '_' as u8
+            || byte == '~' as u8 {
+            string.push(byte as char);
+        } else {
+            string.push_str(&format!("%{:X}", byte));
+        }
     }
+    string
+}
+
+impl TrackerReq {
+    pub fn to_query_string_pairs(&self) -> Vec<(String, String)> {
+        let mut pairs: Vec<(String, String)> = Vec::new();
+            pairs.push(("info_hash".to_string(), url_encode(&self.info_hash)));
+            pairs.push(("peer_id".to_string(), url_encode(&self.peer_id)));
+            pairs.push(("port".to_string(), self.port.to_string()));
+            pairs.push(("uploaded".to_string(), self.uploaded.to_string()));
+            pairs.push(("left".to_string(), self.left.to_string()));
+            pairs.push(("compact".to_string(), (if self.compact { 1 } else { 0 }).to_string()));
+            pairs.push(("no_peer_id".to_string(), (if self.no_peer_id { 1 } else { 0 }).to_string()));
+            pairs.push(("event".to_string(), self.event.to_string()));
+
+        pairs
+    }
+
 }
 
 fn missing_field(fld: &str) -> DecodeError {
@@ -91,6 +117,16 @@ pub enum TrackerEvent {
     Started,
     Stopped,
     Completed,
+}
+
+impl ToString for TrackerEvent {
+    fn to_string(&self) -> String {
+        (match self {
+            &TrackerEvent::Started => "started",
+            &TrackerEvent::Stopped => "stopped",
+            &TrackerEvent::Completed=> "complete",
+        }).to_string()
+    }
 }
 
 pub struct TrackerResp {

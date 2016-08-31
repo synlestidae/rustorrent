@@ -6,7 +6,7 @@ use hyper::client::Client;
 use hyper::net::HttpStream;
 
 pub trait TrackerHandler {
-    fn request(req: &TrackerReq) -> TrackerResp;
+    fn request(self: &Self, req: &TrackerReq) -> TrackerResp;
 }
 
 pub struct HttpTrackerHandler {
@@ -20,7 +20,7 @@ impl HttpTrackerHandler {
 }
 
 impl TrackerHandler for HttpTrackerHandler {
-    fn request(_: &TrackerReq) -> TrackerResp {
+    fn request(&self, req: &TrackerReq) -> TrackerResp {
         let mut url = self.url.clone();
         unimplemented!()
     }
