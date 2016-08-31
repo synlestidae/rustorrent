@@ -46,16 +46,17 @@ impl TrackerHandler for HttpTrackerHandler {
         url.set_query(Some(&query_string));
 
         //make the request
-        let client = Client::new();
+        let client = Client::with_connector(P::new());
         match client.get(url).send() {
             Ok(mut response) => {
                 let mut response_bytes = Vec::new();
                 response.read_to_end(&mut response_bytes); 
-                let response_dict = belement_decode(&response_bytes).unwrap();
-                unimplemented!()
+                match belement_decode(&response_bytes).unwrap() {
+                    DecodeResult(Bencode::BDict(dict), _) => Ok(TrackerResp::try_from(dict).unwrap()),
+                    _ => panic!("Incorrect data")
+                }
             },
             Err(_) => Err(TrackerError::Unknown),
         }
-
     }
 }
