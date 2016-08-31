@@ -19,7 +19,9 @@ pub struct TrackerReq {
     pub key: Option<String>,
     pub trackerid: Option<String>,
 }
-
+fn url_encode_str(string: &str) -> String {
+    url_encode(&string.to_string().into_bytes())
+}
 fn url_encode(bytes: &[u8]) -> String {
     let mut string = String::new();
     for &byte in bytes {
@@ -46,9 +48,12 @@ impl TrackerReq {
             pairs.push(("no_peer_id".to_string(), (if self.no_peer_id { 1 } else { 0 }).to_string()));
             pairs.push(("event".to_string(), self.event.to_string()));
 
-        pairs
+            self.ip.iter().map(|ip_addr| pairs.push(("ip".to_string(), url_encode_str(&ip_addr.to_string()))));
+            self.numwant.iter().map(|numwant| pairs.push(("numwant".to_string(), url_encode_str(&numwant.to_string()))));
+            self.key.iter().map(|key| pairs.push(("key".to_string(), url_encode_str(&key.to_string()))));
+        
+            pairs
     }
-
 }
 
 fn missing_field(fld: &str) -> DecodeError {
