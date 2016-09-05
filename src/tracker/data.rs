@@ -25,9 +25,9 @@ fn url_encode_str(string: &str) -> String {
 fn url_encode(bytes: &[u8]) -> String {
     let mut string = String::new();
     for &byte in bytes {
-        if ('a' as u8 <= byte && byte <= 'z' as u8) || ('A' as u8 <= byte && byte <= 'Z' as u8) 
-            || ('0' as u8 <= byte && byte <= '9' as u8) || byte == '.' as u8 || byte == '-' as u8 || byte == '_' as u8
-            || byte == '~' as u8 {
+        if ('a' as u8 <= byte && byte <= 'z' as u8) || ('A' as u8 <= byte && byte <= 'Z' as u8) ||
+           ('0' as u8 <= byte && byte <= '9' as u8) || byte == '.' as u8 ||
+           byte == '-' as u8 || byte == '_' as u8 || byte == '~' as u8 {
             string.push(byte as char);
         } else {
             string.push_str(&format!("%{:X}", byte));
@@ -39,20 +39,38 @@ fn url_encode(bytes: &[u8]) -> String {
 impl TrackerReq {
     pub fn to_query_string_pairs(&self) -> Vec<(String, String)> {
         let mut pairs: Vec<(String, String)> = Vec::new();
-            pairs.push(("info_hash".to_string(), url_encode(&self.info_hash)));
-            pairs.push(("peer_id".to_string(), url_encode(&self.peer_id)));
-            pairs.push(("port".to_string(), self.port.to_string()));
-            pairs.push(("uploaded".to_string(), self.uploaded.to_string()));
-            pairs.push(("left".to_string(), self.left.to_string()));
-            pairs.push(("compact".to_string(), (if self.compact { 1 } else { 0 }).to_string()));
-            pairs.push(("no_peer_id".to_string(), (if self.no_peer_id { 1 } else { 0 }).to_string()));
-            pairs.push(("event".to_string(), self.event.to_string()));
+        pairs.push(("info_hash".to_string(), url_encode(&self.info_hash)));
+        pairs.push(("peer_id".to_string(), url_encode(&self.peer_id)));
+        pairs.push(("port".to_string(), self.port.to_string()));
+        pairs.push(("uploaded".to_string(), self.uploaded.to_string()));
+        pairs.push(("left".to_string(), self.left.to_string()));
+        pairs.push(("compact".to_string(),
+                    (if self.compact {
+                1
+            } else {
+                0
+            })
+            .to_string()));
+        pairs.push(("no_peer_id".to_string(),
+                    (if self.no_peer_id {
+                1
+            } else {
+                0
+            })
+            .to_string()));
+        pairs.push(("event".to_string(), self.event.to_string()));
 
-            self.ip.iter().map(|ip_addr| pairs.push(("ip".to_string(), url_encode_str(&ip_addr.to_string()))));
-            self.numwant.iter().map(|numwant| pairs.push(("numwant".to_string(), url_encode_str(&numwant.to_string()))));
-            self.key.iter().map(|key| pairs.push(("key".to_string(), url_encode_str(&key.to_string()))));
-        
-            pairs
+        self.ip
+            .iter()
+            .map(|ip_addr| pairs.push(("ip".to_string(), url_encode_str(&ip_addr.to_string()))));
+        self.numwant.iter().map(|numwant| {
+            pairs.push(("numwant".to_string(), url_encode_str(&numwant.to_string())))
+        });
+        self.key
+            .iter()
+            .map(|key| pairs.push(("key".to_string(), url_encode_str(&key.to_string()))));
+
+        pairs
     }
 }
 
@@ -78,18 +96,18 @@ impl TryFrom<BDict> for TrackerReq {
 impl TryFrom<BDict> for TrackerResp {
     type Err = DecodeError;
     fn try_from(dict: BDict) -> Result<Self, Self::Err> {
-        //required fields
+        // required fields
         let interval: BInt = try!(dict.get_copy("interval").ok_or(missing_field("interval")));
         let tracker_id: String = try!(dict.get_copy("tracker id")
             .ok_or(missing_field("tracker id")));
         let complete: BInt = try!(dict.get_copy("complete").ok_or(missing_field("complete")));
-        
-        //optional fields
+
+        // optional fields
         let failure_reason: Option<String> = dict.get_copy("failure reason");
         let warning_message: Option<String> = dict.get_copy("warning message");
         let min_interval: Option<BInt> = dict.get_copy("min interval");
-        
-        //parse the peer list
+
+        // parse the peer list
         let peers_blist: Vec<BDict> = try!(dict.get_copy("peers").ok_or(missing_field("peers")));
         let mut peers_list = Vec::new();
         for peer in peers_blist {
@@ -105,7 +123,7 @@ impl TryFrom<BDict> for TrackerResp {
             });
         }
 
-        //piece it together
+        // piece it together
         Ok(TrackerResp {
             failure_reason: failure_reason,
             warning_message: warning_message,
@@ -127,10 +145,11 @@ pub enum TrackerEvent {
 impl ToString for TrackerEvent {
     fn to_string(&self) -> String {
         (match self {
-            &TrackerEvent::Started => "started",
-            &TrackerEvent::Stopped => "stopped",
-            &TrackerEvent::Completed=> "complete",
-        }).to_string()
+                &TrackerEvent::Started => "started",
+                &TrackerEvent::Stopped => "stopped",
+                &TrackerEvent::Completed => "complete",
+            })
+            .to_string()
     }
 }
 

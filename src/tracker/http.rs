@@ -1,5 +1,6 @@
-use tracker::{TrackerReq, TrackerResp};
-use bencode::decode::belement_decode;
+use tracker::data::{TrackerReq, TrackerResp};
+use bencode::Bencode;
+use bencode::decode::{belement_decode, DecodeResult};
 use bencode::BDict;
 use hyper::Url;
 use hyper::client::Request;
@@ -15,25 +16,27 @@ pub trait TrackerHandler {
 }
 
 pub struct HttpTrackerHandler {
-    url: Url
+    url: Url,
 }
 
 impl HttpTrackerHandler {
     pub fn new(url: Url) -> HttpTrackerHandler {
-        HttpTrackerHandler { url: url  } 
+        HttpTrackerHandler { url: url }
     }
 }
 
 #[derive(Debug)]
 pub enum TrackerError {
-    Unknown
+    Unknown,
 }
 
 impl Error for TrackerError {
-    fn description(&self) -> &str { unimplemented!() }
+    fn description(&self) -> &str {
+        unimplemented!()
+    }
 }
 
-impl fmt::Display for TrackerError { 
+impl fmt::Display for TrackerError {
     fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
         unimplemented!()
     }
@@ -41,13 +44,15 @@ impl fmt::Display for TrackerError {
 
 impl TrackerHandler for HttpTrackerHandler {
     fn request(&self, req: &TrackerReq) -> Result<TrackerResp, TrackerError> {
-        //build the url 
+        // build the url
         let mut url = self.url.clone();
-        let query_string = req.to_query_string_pairs().iter()
-            .fold(String::new(), |string, &(ref k, ref v)| format!("{}{}={}", string, k, v));
+        let query_string = req.to_query_string_pairs()
+            .iter()
+            .fold(String::new(),
+                  |string, &(ref k, ref v)| format!("{}{}={}", string, k, v));
         url.set_query(Some(&query_string));
 
-        //make the request
+        // make the request
         let client = Client::new();
         match client.get(url).send() {
             Ok(mut response) => {
@@ -60,6 +65,5 @@ impl TrackerHandler for HttpTrackerHandler {
             },
             Err(_) => Err(TrackerError::Unknown),
         }
-
     }
 }
