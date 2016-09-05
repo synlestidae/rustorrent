@@ -3,7 +3,7 @@ use std::{error, fmt};
 use std::string::FromUtf8Error;
 use std::num::ParseIntError;
 use self::DecodeErrorKind::*;
-use std::convert::{From};
+use std::convert::From;
 use convert::TryFrom;
 
 pub mod decode;
@@ -33,6 +33,25 @@ impl TryFrom<Bencode> for BInt {
     }
 }
 
+// impl TryFrom<Bencode> for String {
+// type Err = DecodeError;
+// fn try_from(element: Bencode) -> Result<Self, Self::Err> {
+// match element {
+// Bencode::BString(belement) => belement.to_string().map_err(|_| DecodeError {
+// position: None,
+// kind: DecodeErrorKind::ConversionError
+// }),
+// _ => {
+// Err(DecodeError {
+// position: None,
+// kind: DecodeErrorKind::ConversionError,
+// })
+// }
+// }
+// }
+//
+// }
+
 impl TryFrom<Bencode> for BString {
     type Err = DecodeError;
     fn try_from(element: Bencode) -> Result<Self, Self::Err> {
@@ -52,13 +71,13 @@ impl TryFrom<Bencode> for String {
     type Err = DecodeError;
     fn try_from(element: Bencode) -> Result<Self, Self::Err> {
         let error = DecodeError {
-                    position: None,
-                    kind: DecodeErrorKind::ConversionError,
-                };
+            position: None,
+            kind: DecodeErrorKind::ConversionError,
+        };
 
         match element {
             Bencode::BString(belement) => belement.to_string().map_err(|_| error),
-            _ => Err(error)
+            _ => Err(error),
         }
     }
 }
@@ -101,18 +120,22 @@ impl<A: TryFrom<Bencode>> TryFrom<Bencode> for Vec<A> {
                 for item in blist.0.into_iter() {
                     match A::try_from(item) {
                         Ok(item_a) => result.push(item_a),
-                        _ => return Err(DecodeError {
-                            position: None,
-                            kind: DecodeErrorKind::ConversionError,
-                        })
+                        _ => {
+                            return Err(DecodeError {
+                                position: None,
+                                kind: DecodeErrorKind::ConversionError,
+                            })
+                        }
                     }
                 }
                 Ok(result)
-            },
-            _ => Err(DecodeError {
+            }
+            _ => {
+                Err(DecodeError {
                     position: None,
                     kind: DecodeErrorKind::ConversionError,
                 })
+            }
         }
     }
 }
@@ -129,7 +152,7 @@ impl BDict {
     pub fn get_copy<A: TryFrom<Bencode>>(&self, key: &str) -> Option<A> {
         match self.get(key) {
             Some(&ref element) => A::try_from(element.clone()).ok(),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -190,8 +213,8 @@ pub enum Bencode {
 
 #[derive(Debug)]
 pub struct DecodeError {
-    position: Option<usize>,
-    kind: DecodeErrorKind,
+    pub position: Option<usize>,
+    pub kind: DecodeErrorKind,
 }
 
 #[derive(Debug)]
@@ -204,6 +227,7 @@ pub enum DecodeErrorKind {
     IntNegativeZero,
     Utf8Err(FromUtf8Error),
     ConversionError,
+    MissingField(String),
 }
 
 impl fmt::Display for Bencode {
@@ -268,7 +292,10 @@ impl fmt::Display for DecodeError {
             IntParsingErr(ref intpe) => write!(f, "{}", intpe), 
             IntNegativeZero => write!(f, "-0 is not a valid integer"),
             Utf8Err(ref u8e) => write!(f, "{}", u8e),
-            ConversionError => write!(f, "cannot convert type")
+            ConversionError => write!(f, "cannot convert type"),
+            MissingField(ref field) => {
+                write!(f, "required field '{}' is missing on dictionary", field)
+            }
         });
         match self.position {
             Some(ref l) => write!(f, " at byte `{}` of the input stream", l),
@@ -287,7 +314,8 @@ impl error::Error for DecodeError {
             IntParsingErr(..) => "failed to parse integer",
             IntNegativeZero => "-0 is not a valid integer",
             Utf8Err(..) => "failed with an utf8error",
-            ConversionError => "failed to convert type"
+            ConversionError => "failed to convert type",
+            MissingField(..) => "required field is missing",
         }
     }
 }

@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Matej Ľach <me@matej-lach.me>"]
 
 [dependencies]
+hyper = "0.9.10"
+byteorder = "0.5.3"

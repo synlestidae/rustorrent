@@ -79,9 +79,12 @@ impl MetaInfo {
     fn get_info(dict: &BDict) -> Result<FileInfo, MetaInfoError> {
         let mut info: FileInfo = Default::default();
         let bdict: BDict = try!(dict.get_copy("info").ok_or(MetaInfoError::missing_field("info")));
-        info.piece_length = try!(bdict.get_copy("piece length").map(|pl: BInt| pl.to_i64() as u64).ok_or(MetaInfoError::missing_field("piece length")));
+        info.piece_length = try!(bdict.get_copy("piece length")
+            .map(|pl: BInt| pl.to_i64() as u64)
+            .ok_or(MetaInfoError::missing_field("piece length")));
         info.private = bdict.get_copy("private").map(|p: BInt| p.to_i64() as u32);
-        let pieces_bstr: BString = try!(bdict.get_copy("pieces").ok_or(MetaInfoError::missing_field("pieces")));
+        let pieces_bstr: BString = try!(bdict.get_copy("pieces")
+            .ok_or(MetaInfoError::missing_field("pieces")));
         let pieces = pieces_bstr.to_bytes();
         let pieces_vec = (0..pieces.len() / 20)
             .map(|p| (&pieces[p..(p + 20)]).iter().map(|&b| b).collect())
@@ -90,8 +93,8 @@ impl MetaInfo {
         info.pieces = pieces_vec;
         info.name = bdict.get_copy("name");
 
-        let single_file_fields: (Option<BString>, Option<BInt>) = 
-            (bdict.get_copy("md5sum"), bdict.get_copy("length"));
+        let single_file_fields: (Option<BString>, Option<BInt>) = (bdict.get_copy("md5sum"),
+                                                                   bdict.get_copy("length"));
         if let (md5sum, Some(length)) = single_file_fields {
             info.mode_info = ModeInfo::Single(SingleFileInfo {
                 md5_sum: md5sum.map(|m| m.to_bytes()),
@@ -104,10 +107,12 @@ impl MetaInfo {
         let bdict_list: Vec<BDict> = try!(bdict_files.ok_or(MetaInfoError::missing_field("files")));
         let mut files = Vec::new();
         for fdict in bdict_list.into_iter() {
-             let length:BInt = try!(fdict.get_copy("length").ok_or(MetaInfoError::missing_field("length")));
-             let md5_sum = fdict.get_copy("md5sum").map(|m: BString| m.to_bytes());
-             let path: Vec<String> = try!(fdict.get_copy("path").ok_or(MetaInfoError::missing_field("path")));
-             files.push((length.to_i64() as u64, md5_sum, path));
+            let length: BInt = try!(fdict.get_copy("length")
+                .ok_or(MetaInfoError::missing_field("length")));
+            let md5_sum = fdict.get_copy("md5sum").map(|m: BString| m.to_bytes());
+            let path: Vec<String> = try!(fdict.get_copy("path")
+                .ok_or(MetaInfoError::missing_field("path")));
+            files.push((length.to_i64() as u64, md5_sum, path));
         }
 
         info.mode_info = ModeInfo::Multi(MultiFileInfo { files: files });
