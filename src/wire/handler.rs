@@ -1,3 +1,5 @@
+use wire::data::PeerMsg;
+
 pub trait PeerHandler {
     fn handshake(&self) -> bool;
     fn on_message_receive(&self, msg: PeerMsg);

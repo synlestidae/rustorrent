@@ -1,4 +1,5 @@
 use std::convert::Into;
+use convert::TryFrom;
 use std::string::ToString;
 use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
 
@@ -79,5 +80,12 @@ impl Into<Vec<u8>> for PeerMsg {
         }
         front_part.append(&mut bytes);
         front_part
+    }
+}
+
+impl TryFrom<Vec<u8>> for PeerMsg {
+    type Err = ();
+    fn try_from(vec: Vec<u8>) -> Result<Self, Self::Err> {
+        unimplemented!();
     }
 }
