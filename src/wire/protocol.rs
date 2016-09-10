@@ -1,19 +1,16 @@
-use std::io::{Read, Write};
+use std::io::{Read};
 use wire::data::PeerMsg;
 use std::thread;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use byteorder::{BigEndian, ReadBytesExt};
 use byteorder::ByteOrder;
 
-pub struct PeerManager<S: Read + Write> {
-    source: S
-}
 
-struct StreamContainer<S: Read + Write> {
+struct StreamContainer<S: Read + Send> {
    src: S 
 }
 
-impl<S: Read + Write> StreamContainer<S> {
+impl<S: Read + Send> StreamContainer<S> {
     pub fn new(src: S) -> StreamContainer<S> {
         StreamContainer {
             src: src
@@ -42,8 +39,21 @@ impl<S: Read + Write> StreamContainer<S> {
 
 }
 
+pub struct PeerManager {
+    src: Receiver<Vec<u8>>
+}
+
+
 pub type Err = ();
-impl<S: Read + Write> PeerManager<S> {
+impl PeerManager {
+    pub fn from<S: Read>(src: S) -> PeerManager where S: Send {
+        let (tx, rx) = channel();
+        let container = StreamContainer::new(src);
+        let job = move || container.run(tx);
+        thread::spawn(job);
+        PeerManager { src: rx }
+    }
+
     pub fn send_message(&self, msg: PeerMsg) -> Result<PeerMsg, Err> {
         unimplemented!();
     }
