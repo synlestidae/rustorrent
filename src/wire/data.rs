@@ -2,8 +2,10 @@ use std::convert::Into;
 use convert::TryFrom;
 use std::string::ToString;
 use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
+use metainfo::SHA1Hash20b;
 
 pub enum PeerMsg {
+    HandShake(String, SHA1Hash20b, SHA1Hash20b),
     KeepAlive,
     Choke,
     Unchoke,
@@ -21,10 +23,13 @@ impl PeerMsg {
     pub fn id(&self) -> Option<u8> {
         if let &PeerMsg::KeepAlive = self {
             return None;
+        } else if let &PeerMsg::HandShake(..) = self {
+            return None
         }
 
         Some(match self {
             &PeerMsg::KeepAlive => 0, //unreachable
+            &PeerMsg::HandShake(..) => 0, //unreachable
             &PeerMsg::Choke => 0,
             &PeerMsg::Unchoke => 1,
             &PeerMsg::Interested => 2,
@@ -43,6 +48,19 @@ impl Into<Vec<u8>> for PeerMsg {
     fn into(self) -> Vec<u8> {
         let mut out: Vec<u8> = Vec::new();
         let mut bytes = match self {
+           PeerMsg::HandShake(mut protocol_id, mut info_hash, mut peer_id) => {
+               let protocol_bytes = protocol_id.into_bytes();
+               let mut p_bytes = &protocol_bytes[0..protocol_bytes.len()];
+               if p_bytes.len() > 255 {
+                   p_bytes = &p_bytes[0..255]
+               }
+               out.push(p_bytes.len() as u8);
+               out.extend_from_slice(p_bytes);
+               out.append(&mut vec![0, 0, 0, 0, 0, 0, 0, 0]);
+               out.append(&mut info_hash);
+               out.append(&mut peer_id);
+               return out;
+           },
            PeerMsg::Have(piece_index) => {
                 out.write_u32::<BigEndian>(piece_index);
                 out
