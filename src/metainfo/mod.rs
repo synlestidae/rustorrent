@@ -1,7 +1,7 @@
 use bencode::{BDict, BString, BInt};
 use std::{error, fmt};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MetaInfo {
     pub announce: String,
     pub announce_list: Vec<Vec<String>>,
@@ -51,7 +51,7 @@ impl error::Error for MetaInfoError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MetaInfoErrorKind {
     MissingField(String),
     FieldIsWrongType(String),
@@ -120,15 +120,16 @@ impl MetaInfo {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FileInfo {
-    piece_length: u64,
-    pieces: Vec<SHA1Hash20b>,
-    private: Option<u32>,
-    name: Option<String>,
-    mode_info: ModeInfo,
+    pub piece_length: u64,
+    pub pieces: Vec<SHA1Hash20b>,
+    pub private: Option<u32>,
+    pub name: Option<String>,
+    pub mode_info: ModeInfo,
 }
 
+#[derive(Clone)]
 pub enum ModeInfo {
     Single(SingleFileInfo),
     Multi(MultiFileInfo),
@@ -140,15 +141,15 @@ impl Default for ModeInfo {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SingleFileInfo {
     pub length: u64,
     pub md5_sum: Option<MD5Sum>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MultiFileInfo {
-    files: Vec<(u64, Option<MD5Sum>, FPath)>,
+    pub files: Vec<(u64, Option<MD5Sum>, FPath)>,
 }
 
 pub type MD5Sum = Vec<u8>;
