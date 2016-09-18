@@ -5,6 +5,7 @@ use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
 use metainfo::SHA1Hash20b;
 
 pub enum PeerMsg {
+    //info hash, peer id
     HandShake(String, SHA1Hash20b, SHA1Hash20b),
     KeepAlive,
     Choke,
