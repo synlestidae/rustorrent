@@ -8,6 +8,8 @@ use bencode::decode::belement_decode;
 use std::io::prelude::*;
 #[allow(unused_imports)]
 use std::fs::File;
+#[allow(unused_imports)]
+use convert::TryFrom;
 
 #[test]
 pub fn test_parses_torrent_metainfo_file() {
@@ -17,7 +19,7 @@ pub fn test_parses_torrent_metainfo_file() {
     let dict = belement_decode(&bytes).unwrap().0;
     match dict {
         Bencode::BDict(bdict) => {
-            MetaInfo::from(&bdict).unwrap();
+            MetaInfo::try_from(bdict).unwrap();
         }
         _ => panic!("Got wrong kind of object"),
     }
@@ -32,7 +34,7 @@ pub fn test_parses_torrent_metainfo_file_2() {
     let dict = decode_result.0;
     match dict {
         Bencode::BDict(bdict) => {
-            MetaInfo::from(&bdict).unwrap();
+            MetaInfo::try_from(bdict).unwrap();
         }
         _ => panic!("Got wrong kind of object"),
     }

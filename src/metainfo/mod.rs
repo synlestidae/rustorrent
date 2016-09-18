@@ -1,5 +1,6 @@
 use bencode::{BDict, BString, BInt};
 use std::{error, fmt};
+use convert::TryFrom;
 
 #[derive(Default, Clone)]
 pub struct MetaInfo {
@@ -57,8 +58,12 @@ pub enum MetaInfoErrorKind {
     FieldIsWrongType(String),
     InvalidDataFieldValue(String),
 }
-impl MetaInfo {
-    pub fn from(dict: &BDict) -> Result<MetaInfo, MetaInfoError> {
+
+impl TryFrom<BDict> for MetaInfo {
+    type Err = MetaInfoError;
+
+    fn try_from(bdict: BDict) -> Result<MetaInfo, MetaInfoError> {
+        let dict = &bdict;
         let mut info: MetaInfo = Default::default();
 
         let announce: Option<String> = dict.get_copy("announce");
@@ -75,7 +80,10 @@ impl MetaInfo {
         info.info = try!(MetaInfo::get_info(dict));
         Ok(info)
     }
+}
 
+
+impl MetaInfo {
     fn get_info(dict: &BDict) -> Result<FileInfo, MetaInfoError> {
         let mut info: FileInfo = Default::default();
         let bdict: BDict = try!(dict.get_copy("info").ok_or(MetaInfoError::missing_field("info")));
