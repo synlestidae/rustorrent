@@ -4,6 +4,7 @@ use mio::channel::channel;
 use mio::channel::{Sender, Receiver};
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::net::SocketAddr;
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 use wire::handler::{BasicHandler, PeerHandler};
@@ -22,7 +23,7 @@ pub struct Protocol<H: PeerHandler> {
 
 #[derive(Debug)]
 pub enum ChanMsg {
-    NewPeer(IpAddr)
+    NewPeer(IpAddr, u16)
 }
 
 impl<H: PeerHandler> Protocol<H> {
@@ -68,6 +69,15 @@ impl<H: PeerHandler> Protocol<H> {
         }
     }
 
-    fn _handle_outside_msg(&self, msg: ChanMsg) {
+    fn _handle_outside_msg(&mut self, msg: ChanMsg) {
+        match msg {
+            ChanMsg::NewPeer(ip, port) => self._connect_to_peer(ip, port)
+        }
+    }
+
+    fn _connect_to_peer(&mut self, addr: IpAddr, port: u16) {
+        let sock_addr = SocketAddr::new(addr, port);
+        let sock = TcpStream::connect(&sock_addr).unwrap();
+        self.poll.register(&sock, Token(1), Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();
     }
 }
