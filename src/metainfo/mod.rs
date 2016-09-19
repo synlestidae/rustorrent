@@ -82,6 +82,12 @@ impl TryFrom<BDict> for MetaInfo {
     }
 }
 
+impl Into<BDict> for MetaInfo {
+    fn into(self) -> BDict {
+        unimplemented!();
+    }
+}
+
 
 impl MetaInfo {
     fn get_info(dict: &BDict) -> Result<FileInfo, MetaInfoError> {
