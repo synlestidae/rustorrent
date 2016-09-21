@@ -3,6 +3,7 @@ use file::PartialFile;
 use metainfo::MetaInfo;
 use convert::TryInto;
 use sha1::{Sha1, Digest};
+use metainfo::SHA1Hash20b;
 
 pub trait PeerHandler {
     fn handshake(&mut self, info: &MetaInfo, pf: &PartialFile) -> Vec<PeerMsg>;
@@ -23,15 +24,6 @@ const _protocol_id: &'static str = "rustorrent-beta";
 
 impl PeerHandler for BasicHandler {
     fn handshake(&mut self, info: &MetaInfo, pf: &PartialFile) -> Vec<PeerMsg> {
-        /*if let Ok(info) = info.info.try_into() {
-            let sha1 = Sha1::new();
-            let hash = sha1.update(info).digest().bytes();
-            let id = self.id.to_string().into_bytes();
-            id.resize(0);
-            PeerMsg::HandShake(_protocol_id.to_string().into_bytes(), hash, id)
-        } else {
-            vec![]
-        }*/
         unimplemented!();
     }
     fn on_message_receive(&mut self, info: &MetaInfo, pf: &PartialFile, msg: PeerMsg) -> Vec<PeerMsg> {
@@ -44,4 +36,15 @@ impl PeerHandler for BasicHandler {
         unimplemented!()
     }
 
+}
+
+pub type PeerId = u32;
+pub struct PeerAction(PeerId, Vec<PeerMsg>);
+
+pub trait ServerHandler {
+    fn new(metainfo: MetaInfo, hash: SHA1Hash20b) -> Self;
+    fn on_peer_connect(&mut self, PeerId) -> PeerAction;
+    fn on_message_receive(&mut self, id: PeerId, partial_file: &mut PartialFile) -> PeerAction;
+    fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction;
+    fn on_loop(&mut self) -> PeerAction;
 }
