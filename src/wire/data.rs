@@ -3,6 +3,7 @@ use convert::TryFrom;
 use std::string::ToString;
 use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
 use metainfo::SHA1Hash20b;
+use file::PartialFile;
 
 pub enum PeerMsg {
     //info hash, peer id
@@ -42,6 +43,12 @@ impl PeerMsg {
             &PeerMsg::Cancel(_, _, _) => 8,
             &PeerMsg::Port(_) => 9,
         })
+    }
+
+    pub fn handshake(protocol_id: String, peer_id: String, hash: &SHA1Hash20b) -> PeerMsg {
+        let mut id = peer_id.into_bytes();
+        id.resize(20, 0);
+        PeerMsg::HandShake(protocol_id, hash.clone(), id)
     }
 }
 

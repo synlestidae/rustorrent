@@ -23,8 +23,6 @@ impl PeerHandler for BasicHandler {
     }
 
     fn handshake(&mut self, hash: &SHA1Hash20b, pf: &PartialFile) -> Vec<PeerMsg> {
-        /*let sha1 = Sha1::new();
-        let hash = sha1.update(info).digest().bytes();*/
         let mut id = self.0.to_string().into_bytes();
         id.resize(20, 0);
         vec![PeerMsg::HandShake(_protocol_id.to_string(), hash.clone(), id)]
@@ -38,5 +36,19 @@ impl PeerHandler for BasicHandler {
     fn peer_interested(&self, info: &MetaInfo, pf: &PartialFile) -> bool {
         unimplemented!()
     }
+}
 
+pub type PeerId = u32;
+pub enum PeerAction {
+    Nothing,
+    SendMessages(Vec<PeerMsg>),
+    Disconnect
+}
+
+pub trait ServerHandler {
+    fn new(metainfo: MetaInfo, hash: SHA1Hash20b, our_peer_id: &str) -> Self;
+    fn on_peer_connect(&mut self, PeerId) -> PeerAction;
+    fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction;
+    fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction;
+    fn on_loop(&mut self) -> PeerAction;
 }

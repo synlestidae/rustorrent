@@ -22,6 +22,7 @@ impl fmt::Display for MetaInfoError {
         write!(f, "Error while parsing metainfo: {}", self._description())
     }
 }
+
 impl MetaInfoError {
     pub fn missing_field(field: &str) -> MetaInfoError {
         MetaInfoError { kind: MetaInfoErrorKind::MissingField(field.to_string()) }
