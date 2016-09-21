@@ -25,6 +25,14 @@ impl PartialFile {
         true
     }
 
+    pub fn has_piece(&self, i: usize) -> bool {
+        self._is_piece_complete(i)
+    }
+
+    pub fn get_piece_mut<'a>(&self, i: usize) -> &'a mut Piece {
+        &mut self.collection.pieces[i]
+    }
+
     fn _is_piece_complete(&self, i: usize) -> bool {
         let mut sha1: Sha1 = Sha1::new();
         sha1.update(&self.collection[i]); 
@@ -43,6 +51,19 @@ impl PartialFile {
     pub fn add_piece(&mut self, index: usize, offset: usize, block: Vec<u8>) -> bool {
         self.collection.add(index, offset, block)
     }
+}
+
+struct Piece {
+    data: Vec<u8>,
+    length: u32
+}
+
+impl Piece {
+    pub fn add(&mut self: offset: u32, block: Vec<u8>) {
+
+    }
+
+    pub fn get_offset(
 }
 
 struct PieceCollection {
