@@ -18,7 +18,13 @@ pub struct Protocol<H: PeerHandler> {
     receiver: Receiver<ChanMsg>,
     info: MetaInfo,
     info_hash: SHA1Hash20b,
-    handlers: Vec<H>
+    handlers: Vec<Peer<H>>
+}
+
+struct Peer<H: PeerHandler> {
+    stream: TcpStream,
+    handler: H,
+    buffer: Vec<u8>
 }
 
 #[derive(Debug)]
@@ -63,9 +69,22 @@ impl<H: PeerHandler> Protocol<H> {
                              _ => ()
                          }
                      },
-                     _ => println!("Oooooh better do something!")
+                     _ => self._handle_socket_event(event)
                  }
              }
+        }
+    }
+
+    pub fn _handle_socket_event(&mut self, event: Event) {
+        let kind = event.kind();
+        if kind.is_readable() {
+            //read bytes of messages
+        }
+        if kind.is_writable() {
+            //write pending messages
+        }
+        if kind.is_hup() {
+            //remove socket and clean up
         }
     }
 
