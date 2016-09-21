@@ -1,6 +1,7 @@
 use std::ops::{Index, IndexMut};
 use sha1::{Sha1, Digest};
 use metainfo::FileInfo;
+use metainfo::SHA1Hash20b;
 
 pub struct PartialFile {
     collection: PieceCollection,
@@ -59,23 +60,48 @@ struct Piece {
 }
 
 impl Piece {
-    pub fn add(&mut self: offset: u32, block: Vec<u8>) {
-
+    pub fn new(length: u32, hash: SHA1Hash20b) -> Piece {
+        Piece {
+            data: Vec::new(),
+            length: length,
+            hash: hash
+        }
+    }
+    pub fn add(&mut self, offset: u32, block: &[u8]) -> bool {
+        if offset > self.length || self.is_complete() {
+            return false;
+        }
+        let existing_block = self.data;
+        existing_block.resize(offset + block.len(), 0);
+        for i in 0..block.len() {
+            existing_block[offset + i as usize] = block[i];
+        }
+        true
     }
 
-    pub fn get_offset(
+    pub fn get_offset<'a>(&'a self, offset: usize) -> Option<&'a mut &[u8]> {
+        unimplemented!()
+    }
+
+    pub fn is_complete(&self) -> bool {
+        let mut sha1: Sha1 = Sha1::new();
+        sha1.update(&self.data); 
+        let ref bytes1 = sha1.digest().bytes();
+        let ref bytes2 = self.hash;
+        bytes1 == bytes2.as_slice()
+    }
 }
 
 struct PieceCollection {
-    pieces: Vec<Vec<u8>>,
+    pieces: Vec<Piece>,
     piece_size: u64
 }
 
 impl PieceCollection {
-    pub fn new(pieces: usize, size: u64) -> PieceCollection {
+    pub fn new(pieces: &[SHA1Hash20b], size: u64) -> PieceCollection {
         let mut vec = Vec::new();
-        for i in 0..pieces {
-            vec.push(Vec::new());
+        for hash in pieces {
+            vec.push(Piece::new(size, hash));
         }
         PieceCollection { pieces: vec, piece_size: size } 
     }
@@ -96,15 +122,15 @@ impl PieceCollection {
 }
 
 impl Index<usize> for PieceCollection {
-    type Output = Vec<u8>;
+    type Output = Piece;
 
-    fn index<'a>(&'a self, _index: usize) -> &'a Vec<u8> {
+    fn index<'a>(&'a self, _index: usize) -> &'a Piece {
         &self.pieces[_index]
     }
 }
 
 impl IndexMut<usize> for PieceCollection {
-    fn index_mut<'a>(&'a mut self, _index: usize) -> &'a mut Vec<u8> {
+    fn index_mut<'a>(&'a mut self, _index: usize) -> &'a mut Piece {
         &mut self.pieces[_index]
     }
 }
