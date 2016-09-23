@@ -80,6 +80,8 @@ impl ServerHandler for PeerServer {
             }
         }
 
+        let mut outgoing_msgs = Vec::new();
+
         match msg {
             PeerMsg::HandShake(..) => {},
             PeerMsg::KeepAlive => {},
@@ -89,13 +91,28 @@ impl ServerHandler for PeerServer {
             PeerMsg::NotInterested => peer.peer_interested = false,
             PeerMsg::Have(_) => {},
             PeerMsg::Bitfield(_) => {},
-            PeerMsg::Request(..) => {},
+            PeerMsg::Request(index, begin, offset) => {
+               if self.partial_file.has_piece(index as usize) {
+                   let piece = self.partial_file.get_piece_mut(index as usize);
+                   match piece.get_offset(begin as usize, offset as usize) {
+                       Some(piece_data) => {
+                            let msg = PeerMsg::Piece(begin, offset, Vec::from(piece_data));
+                            outgoing_msgs.push(msg);
+                       },
+                       _ => ()
+                   }
+               }
+            },
             PeerMsg::Piece(..) => {},
             PeerMsg::Cancel(..) => {},
             PeerMsg::Port(_) => {}
         }
-        
-        PeerAction::Nothing
+       
+        if outgoing_msgs.len() > 0 {
+            PeerAction::SendMessages(outgoing_msgs)
+        } else {
+            PeerAction::Nothing
+        }
     }
 
     fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction {

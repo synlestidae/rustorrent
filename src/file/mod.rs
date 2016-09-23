@@ -30,6 +30,11 @@ impl PartialFile {
         self._is_piece_complete(i)
     }
 
+    pub fn get_piece<'a>(&'a self, i: usize) -> &'a Piece {
+        &self.collection.pieces[i]
+    }
+
+
     pub fn get_piece_mut<'a>(&'a mut self, i: usize) -> &'a mut Piece {
         &mut self.collection.pieces[i]
     }
@@ -57,7 +62,8 @@ impl PartialFile {
 struct Piece {
     data: Vec<u8>,
     length: u32,
-    hash: SHA1Hash20b
+    hash: SHA1Hash20b,
+    definitely_complete: bool
 }
 
 impl Piece {
@@ -65,7 +71,8 @@ impl Piece {
         Piece {
             data: Vec::new(),
             length: length,
-            hash: hash
+            hash: hash,
+            definitely_complete: false
         }
     }
     pub fn add(&mut self, offset: usize, block: &[u8]) -> bool {
@@ -80,21 +87,26 @@ impl Piece {
         true
     }
 
-    pub fn get_offset<'a>(&'a mut self, offset: usize) -> Option<&'a mut[u8]> {
+    pub fn get_offset<'a>(&'a mut self, begin: usize, offset: usize) -> Option<&'a [u8]> {
         let len = self.data.len();
-        if self.is_complete() && offset < len {
-            Some(&mut self.data[offset..len])
+        if begin + offset < len && self.is_complete() {
+            Some(&self.data[begin..(begin+offset)])
         } else {
             None
         }
     }
 
-    pub fn is_complete(&self) -> bool {
+    pub fn is_complete(&mut self) -> bool {
+        if self.definitely_complete {
+            return true;
+        }
         let mut sha1: Sha1 = Sha1::new();
         sha1.update(&self.data); 
         let ref bytes1 = sha1.digest().bytes();
         let ref bytes2 = self.hash;
-        bytes1 == bytes2.as_slice()
+        let complete = bytes1 == bytes2.as_slice();
+        self.definitely_complete = complete;
+        complete
     }
 }
 
