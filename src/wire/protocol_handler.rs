@@ -57,26 +57,28 @@ impl ServerHandler for PeerServer {
     }
 
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction {
-        let peer = match self.peers.get_mut(&id) {
-            Some(peer) => peer,
-            None => return PeerAction::Nothing
-        };
+        {
+            let peer = match self.peers.get_mut(&id) {
+                Some(peer) => peer,
+                None => return PeerAction::Nothing
+            };
 
-        if peer.disconnected {
-            return PeerAction::Nothing;
-        }
+            if peer.disconnected {
+                return PeerAction::Nothing;
+            }
 
-        if !peer.has_handshake {
-            match msg {
-                PeerMsg::HandShake(_, ref their_hash, _) => {
-                    if their_hash == &self.hash {
-                        peer.has_handshake = true;
-                    } else {
-                        peer.disconnected = false;
-                    }
-                    return PeerAction::Nothing;
-                },
-                _ => peer.disconnected = true
+            if !peer.has_handshake {
+                match msg {
+                    PeerMsg::HandShake(_, ref their_hash, _) => {
+                        if their_hash == &self.hash {
+                            peer.has_handshake = true;
+                        } else {
+                            peer.disconnected = false;
+                        }
+                        return PeerAction::Nothing;
+                    },
+                    _ => peer.disconnected = true
+                }
             }
         }
 
@@ -85,23 +87,25 @@ impl ServerHandler for PeerServer {
         match msg {
             PeerMsg::HandShake(..) => {},
             PeerMsg::KeepAlive => {},
-            PeerMsg::Choke => peer.peer_choking = true,
-            PeerMsg::Unchoke=> peer.peer_choking = false,
-            PeerMsg::Interested => peer.peer_interested = true,
-            PeerMsg::NotInterested => peer.peer_interested = false,
+            PeerMsg::Choke => {
+                self.peers.get_mut(&id).map(|p| p.peer_choking = true); 
+            },
+            PeerMsg::Unchoke=> { 
+                self.peers.get_mut(&id).map(|p| p.peer_choking = false); 
+            },
+            PeerMsg::Interested => { 
+                self.peers.get_mut(&id).map(|p| p.peer_interested = true); 
+            },
+            PeerMsg::NotInterested => { 
+                self.peers.get_mut(&id).map(|p| p.peer_interested = false); 
+            },
             PeerMsg::Have(_) => {},
             PeerMsg::Bitfield(_) => {},
             PeerMsg::Request(index, begin, offset) => {
-               if self.partial_file.has_piece(index as usize) {
-                   let piece = self.partial_file.get_piece_mut(index as usize);
-                   match piece.get_offset(begin as usize, offset as usize) {
-                       Some(piece_data) => {
-                            let msg = PeerMsg::Piece(begin, offset, Vec::from(piece_data));
-                            outgoing_msgs.push(msg);
-                       },
-                       _ => ()
-                   }
-               }
+              let response = self._get_piece_from_req(index as usize, begin, offset);
+              if response.is_some() {
+                  outgoing_msgs.push(response.unwrap());
+              }
             },
             PeerMsg::Piece(..) => {},
             PeerMsg::Cancel(..) => {},
@@ -123,3 +127,20 @@ impl ServerHandler for PeerServer {
         unimplemented!();
     }
 }
+
+impl PeerServer {
+    fn _get_piece_from_req(&mut self, index: usize, begin: u32, offset: u32) -> Option<PeerMsg> {
+        if self.partial_file.has_piece(index as usize) {
+                   let piece = self.partial_file.get_piece_mut(index as usize);
+                   return match piece.get_offset(begin as usize, offset as usize) {
+                       Some(piece_data) => {
+                            let msg = PeerMsg::Piece(begin, offset, Vec::from(piece_data));
+                            Some(msg)
+                       },
+                       _ => None
+                   };
+               }
+        None
+    }
+}
+
