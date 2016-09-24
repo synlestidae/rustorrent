@@ -7,7 +7,7 @@ use file::PartialFileTrait;
 
 pub struct PartialFile {
     collection: PieceCollection,
-    info: FileInfo
+    info: FileInfo,
 }
 
 impl PartialFileTrait for PartialFile {
@@ -23,7 +23,7 @@ impl PartialFileTrait for PartialFile {
     fn has_piece(&self, i: usize) -> bool {
         self._is_piece_complete(i)
     }
-    
+
     fn bit_array(&self) -> BitVec {
         let mut bit_vec = BitVec::from_elem(self.info.pieces.len(), false);
         for (i, piece) in self.info.pieces.iter().enumerate() {
@@ -41,14 +41,13 @@ impl PartialFile {
     pub fn new(info: &FileInfo) -> PartialFile {
         PartialFile {
             info: info.clone(),
-            collection: PieceCollection::new(&info.pieces,
-                info.pieces.len() as u64)
+            collection: PieceCollection::new(&info.pieces, info.pieces.len() as u64),
         }
     }
 
     fn _is_piece_complete(&self, i: usize) -> bool {
         let mut sha1: Sha1 = Sha1::new();
-        sha1.update(&self.collection[i].data); 
+        sha1.update(&self.collection[i].data);
         let ref bytes1 = sha1.digest().bytes();
         let ref bytes2 = self.info.pieces[i];
         bytes1 == bytes2.as_slice()
@@ -63,9 +62,8 @@ impl PartialFile {
         &mut self.collection.pieces[i]
     }
 
-
     pub fn add_piece(&mut self, index: usize, offset: usize, block: Vec<u8>) -> bool {
-        self.collection.add(index, offset, block)
+        self.collection.add(index as usize, offset as usize, block)
     }
 }
 
@@ -73,7 +71,7 @@ pub struct Piece {
     data: Vec<u8>,
     length: u32,
     hash: SHA1Hash20b,
-    definitely_complete: bool
+    definitely_complete: bool,
 }
 
 impl Piece {
@@ -82,7 +80,7 @@ impl Piece {
             data: Vec::new(),
             length: length,
             hash: hash,
-            definitely_complete: false
+            definitely_complete: false,
         }
     }
     pub fn add(&mut self, offset: usize, block: &[u8]) -> bool {
@@ -100,7 +98,7 @@ impl Piece {
     pub fn get_offset<'a>(&'a mut self, begin: usize, offset: usize) -> Option<&'a [u8]> {
         let len = self.data.len();
         if begin + offset < len && self.is_complete() {
-            Some(&self.data[begin..(begin+offset)])
+            Some(&self.data[begin..(begin + offset)])
         } else {
             None
         }
@@ -108,7 +106,7 @@ impl Piece {
 
     pub fn is_complete(&mut self) -> bool {
         let mut sha1: Sha1 = Sha1::new();
-        sha1.update(&self.data); 
+        sha1.update(&self.data);
         let ref bytes1 = sha1.digest().bytes();
         let ref bytes2 = self.hash;
         bytes1 == bytes2.as_slice()
@@ -117,7 +115,7 @@ impl Piece {
 
 struct PieceCollection {
     pieces: Vec<Piece>,
-    piece_size: u64
+    piece_size: u64,
 }
 
 impl PieceCollection {
@@ -126,20 +124,25 @@ impl PieceCollection {
         for hash in pieces {
             vec.push(Piece::new(size as u32, hash.clone()));
         }
-        PieceCollection { pieces: vec, piece_size: size } 
+        PieceCollection {
+            pieces: vec,
+            piece_size: size,
+        }
     }
 
     pub fn add(&mut self, index: usize, offset: usize, block: Vec<u8>) -> bool {
-        if index >= self.pieces.len() { return false; }
+        if index >= self.pieces.len() {
+            return false;
+        }
         if offset + block.len() > self.piece_size as usize {
             return false;
         }
 
         self.pieces[index].add(offset, &block);
-        //existing_block.resize(offset + block.len(), 0);
-        //for i in 0..block.len() {
+        // existing_block.resize(offset + block.len(), 0);
+        // for i in 0..block.len() {
         //    existing_block.data[offset + i as usize] = block[i];
-        //}
+        // }
         true
     }
 }

@@ -57,12 +57,12 @@ impl TrackerHandler for HttpTrackerHandler {
         match client.get(url).send() {
             Ok(mut response) => {
                 let mut response_bytes = Vec::new();
-                response.read_to_end(&mut response_bytes); 
-                let response_dict =
-                    BDict::try_from(belement_decode(&response_bytes).unwrap().0).unwrap();
+                response.read_to_end(&mut response_bytes);
+                let response_dict = BDict::try_from(belement_decode(&response_bytes).unwrap().0)
+                    .unwrap();
                 let tracker_response: TrackerResp = TrackerResp::try_from(response_dict).unwrap();
                 Ok(tracker_response)
-            },
+            }
             Err(_) => Err(TrackerError::Unknown),
         }
     }

@@ -2,20 +2,16 @@ use bit_vec::BitVec;
 use file::PartialFileTrait;
 
 pub struct PeerFile {
-    pieces: BitVec
+    pieces: BitVec,
 }
 
 impl PeerFile {
     pub fn new(length: usize) -> PeerFile {
-        PeerFile {
-            pieces: BitVec::from_elem(length, false)
-        }
+        PeerFile { pieces: BitVec::from_elem(length, false) }
     }
 
     pub fn from(pieces: &BitVec) -> PeerFile {
-        PeerFile {
-            pieces: BitVec::from_elem(pieces.len(), false)
-        }
+        PeerFile { pieces: BitVec::from_elem(pieces.len(), false) }
     }
 
     pub fn set(&mut self, index: usize, flag: bool) {

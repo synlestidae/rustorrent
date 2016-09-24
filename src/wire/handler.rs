@@ -8,7 +8,11 @@ use metainfo::SHA1Hash20b;
 pub trait PeerHandler {
     fn new(id: String) -> Self;
     fn handshake(&mut self, info_hash: &SHA1Hash20b, pf: &PartialFile) -> Vec<PeerMsg>;
-    fn on_message_receive(&mut self, info: &MetaInfo, pf: &PartialFile, msg: PeerMsg) -> Vec<PeerMsg>;
+    fn on_message_receive(&mut self,
+                          info: &MetaInfo,
+                          pf: &PartialFile,
+                          msg: PeerMsg)
+                          -> Vec<PeerMsg>;
     fn peer_choking(&mut self, info: &MetaInfo, pf: &PartialFile) -> bool;
     fn peer_interested(&self, info: &MetaInfo, pf: &PartialFile) -> bool;
 }
@@ -27,7 +31,11 @@ impl PeerHandler for BasicHandler {
         id.resize(20, 0);
         vec![PeerMsg::HandShake(_protocol_id.to_string(), hash.clone(), id)]
     }
-    fn on_message_receive(&mut self, info: &MetaInfo, pf: &PartialFile, msg: PeerMsg) -> Vec<PeerMsg> {
+    fn on_message_receive(&mut self,
+                          info: &MetaInfo,
+                          pf: &PartialFile,
+                          msg: PeerMsg)
+                          -> Vec<PeerMsg> {
         unimplemented!()
     }
     fn peer_choking(&mut self, info: &MetaInfo, pf: &PartialFile) -> bool {
@@ -42,7 +50,7 @@ pub type PeerId = u32;
 pub enum PeerAction {
     Nothing,
     SendMessages(Vec<PeerMsg>),
-    Disconnect
+    Disconnect,
 }
 
 pub trait ServerHandler {
