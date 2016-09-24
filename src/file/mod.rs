@@ -59,7 +59,7 @@ impl PartialFile {
     }
 }
 
-struct Piece {
+pub struct Piece {
     data: Vec<u8>,
     length: u32,
     hash: SHA1Hash20b,

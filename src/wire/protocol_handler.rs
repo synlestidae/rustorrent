@@ -83,10 +83,14 @@ impl ServerHandler for PeerServer {
         }
 
         let mut outgoing_msgs = Vec::new();
+        let mut handled = true;
 
+        //messages that mutate the peer
         match msg {
             PeerMsg::HandShake(..) => {},
-            PeerMsg::KeepAlive => {},
+            PeerMsg::KeepAlive => {
+            
+            },
             PeerMsg::Choke => {
                 self.peers.get_mut(&id).map(|p| p.peer_choking = true); 
             },
@@ -98,18 +102,26 @@ impl ServerHandler for PeerServer {
             },
             PeerMsg::NotInterested => { 
                 self.peers.get_mut(&id).map(|p| p.peer_interested = false); 
-            },
-            PeerMsg::Have(_) => {},
-            PeerMsg::Bitfield(_) => {},
-            PeerMsg::Request(index, begin, offset) => {
-              let response = self._get_piece_from_req(index as usize, begin, offset);
-              if response.is_some() {
-                  outgoing_msgs.push(response.unwrap());
-              }
-            },
-            PeerMsg::Piece(..) => {},
-            PeerMsg::Cancel(..) => {},
-            PeerMsg::Port(_) => {}
+            }
+            _ => handled = true
+        };
+
+        //messages that don't need to mutate peer
+        if (!handled) {
+            match msg {
+                PeerMsg::Have(_) => {},
+                PeerMsg::Bitfield(_) => {},
+                PeerMsg::Request(index, begin, offset) => {
+                  let response = self._get_piece_from_req(index as usize, begin, offset);
+                  if response.is_some() {
+                      outgoing_msgs.push(response.unwrap());
+                  }
+                },
+                PeerMsg::Piece(..) => {},
+                PeerMsg::Cancel(..) => {},
+                PeerMsg::Port(_) => {},
+                _ => handled = true
+            }
         }
        
         if outgoing_msgs.len() > 0 {
