@@ -7,6 +7,8 @@ use wire::data::PeerMsg;
 use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 
+const TIMEOUT_SECONDS: u64 = 60 * 5;
+
 pub struct PeerState {
     has_handshake: bool,
     disconnected: bool,
@@ -114,7 +116,7 @@ impl ServerHandler for PeerServer {
                 }
                 PeerMsg::Have(index) => peer.file.set(index as usize, true),
                 PeerMsg::Bitfield(_) => {}
-                _ => handled = true,
+                _ => handled = false,
             };
         }
 
@@ -126,7 +128,6 @@ impl ServerHandler for PeerServer {
             }
         };
 
-        //
         if !choking && !handled {
             match msg {
                 PeerMsg::Request(index, begin, offset) => {
@@ -152,15 +153,43 @@ impl ServerHandler for PeerServer {
     }
 
     fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction {
-        unimplemented!();
+        self.peers.remove(&id);
+        PeerAction::Nothing
     }
 
+    //remove peers that have no replied in five minutes
     fn on_loop(&mut self) -> PeerAction {
-        unimplemented!();
+        self._remove_old_peers();
+        PeerAction::Nothing
     }
 }
 
 impl PeerServer {
+    fn _remove_old_peers(&mut self) {
+
+        let for_removal = self._get_timeout_ids();
+
+        for id in for_removal {
+            self.peers.remove(&id);
+        }
+
+    }
+
+    fn _get_timeout_ids(&self) -> Vec<PeerId> {
+        let mut for_removal = Vec::new();
+            for (&id, peer) in &self.peers {
+                match peer.last_keepalive.elapsed() {
+                    Ok(duration) => {
+                        if duration.as_secs() > TIMEOUT_SECONDS {
+                            for_removal.push(id);
+                        }
+                    },
+                    _ => ()
+                }
+            }
+            for_removal
+    }
+
     fn _get_piece_from_req(&mut self, index: usize, begin: u32, offset: u32) -> Option<PeerMsg> {
         if self.partial_file.has_piece(index as usize) {
             let piece = self.partial_file.get_piece_mut(index as usize);
