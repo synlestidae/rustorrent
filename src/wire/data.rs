@@ -4,6 +4,7 @@ use std::string::ToString;
 use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
 use metainfo::SHA1Hash20b;
 use file::PartialFile;
+use bit_vec::BitVec;
 
 pub enum PeerMsg {
     //info hash, peer id
@@ -14,7 +15,7 @@ pub enum PeerMsg {
     Interested,
     NotInterested,
     Have(u32),
-    Bitfield(Vec<bool>),
+    Bitfield(BitVec),
     Request(u32, u32, u32),
     Piece(u32, u32, Vec<u8>),
     Cancel(u32, u32, u32),

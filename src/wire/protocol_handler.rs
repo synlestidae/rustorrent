@@ -5,6 +5,7 @@ use file::PartialFile;
 use std::collections::HashMap;
 use wire::data::PeerMsg;
 use std::time::SystemTime;
+use file::{PartialFileTrait, PeerFile};
 
 pub struct PeerState {
     has_handshake: bool,
@@ -13,11 +14,12 @@ pub struct PeerState {
     peer_interested: bool,
     am_choking: bool,
     am_interested: bool,
-    last_keepalive: SystemTime
+    last_keepalive: SystemTime,
+    file: PeerFile
 }
 
 impl PeerState {
-    pub fn new() -> PeerState {
+    pub fn new(len: usize) -> PeerState {
         PeerState {
             has_handshake: false,
             disconnected: false,
@@ -25,7 +27,8 @@ impl PeerState {
             peer_interested: false,
             am_choking: true,
             am_interested: false,
-            last_keepalive: SystemTime::now()
+            last_keepalive: SystemTime::now(),
+            file: PeerFile::new(len)
         }
     }
 }
@@ -85,42 +88,58 @@ impl ServerHandler for PeerServer {
         let mut outgoing_msgs = Vec::new();
         let mut handled = true;
 
-        //messages that mutate the peer
-        match msg {
-            PeerMsg::HandShake(..) => {},
-            PeerMsg::KeepAlive => {
-            
-            },
-            PeerMsg::Choke => {
-                self.peers.get_mut(&id).map(|p| p.peer_choking = true); 
-            },
-            PeerMsg::Unchoke=> { 
-                self.peers.get_mut(&id).map(|p| p.peer_choking = false); 
-            },
-            PeerMsg::Interested => { 
-                self.peers.get_mut(&id).map(|p| p.peer_interested = true); 
-            },
-            PeerMsg::NotInterested => { 
-                self.peers.get_mut(&id).map(|p| p.peer_interested = false); 
-            }
-            _ => handled = true
-        };
+        {
+            let peer = match self.peers.get_mut(&id) {
+                Some(peer) => peer,
+                None => return PeerAction::Nothing
+            };
+
+            //messages that mutate the peer
+            match msg {
+                PeerMsg::HandShake(..) => {},
+                PeerMsg::KeepAlive => {
+                    peer.last_keepalive = SystemTime::now() 
+                },
+                PeerMsg::Choke => {
+                    peer.peer_choking = true; 
+                },
+                PeerMsg::Unchoke=> { 
+                    peer.peer_choking = false; 
+                },
+                PeerMsg::Interested => { 
+                    peer.peer_interested = true;
+                },
+                PeerMsg::NotInterested => { 
+                    peer.peer_interested = false; 
+                },
+                PeerMsg::Have(index) => {
+                    peer.file.set(index as usize, true) 
+                },
+                _ => handled = true
+            };
+        }
 
         //messages that don't need to mutate peer
-        if (!handled) {
-            match msg {
-                PeerMsg::Have(_) => {},
-                PeerMsg::Bitfield(_) => {},
-                PeerMsg::Request(index, begin, offset) => {
-                  let response = self._get_piece_from_req(index as usize, begin, offset);
-                  if response.is_some() {
-                      outgoing_msgs.push(response.unwrap());
-                  }
-                },
-                PeerMsg::Piece(..) => {},
-                PeerMsg::Cancel(..) => {},
-                PeerMsg::Port(_) => {},
-                _ => handled = true
+        {
+            /*let peer = match self.peers.get(&id) {
+                Some(peer) => peer,
+                None => return PeerAction::Nothing
+            };*/
+
+            if (!handled) {
+                match msg {
+                    PeerMsg::Bitfield(_) => {},
+                    PeerMsg::Request(index, begin, offset) => {
+                      let response = self._get_piece_from_req(index as usize, begin, offset);
+                      if response.is_some() {
+                          outgoing_msgs.push(response.unwrap());
+                      }
+                    },
+                    PeerMsg::Piece(..) => {},
+                    PeerMsg::Cancel(..) => {},
+                    PeerMsg::Port(_) => {},
+                    _ => handled = true
+                }
             }
         }
        
