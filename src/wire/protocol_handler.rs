@@ -17,9 +17,8 @@ pub struct PeerState {
     peer_interested: bool,
     am_choking: bool,
     am_interested: bool,
-    last_keepalive_recvd: SystemTime,
-    last_keepalive_sent: SystemTime,
     last_msg_time: SystemTime,
+    last_msg_sent_time: SystemTime,
     file: PeerFile,
 }
 
@@ -32,9 +31,8 @@ impl PeerState {
             peer_interested: false,
             am_choking: true,
             am_interested: false,
-            last_keepalive_recvd: SystemTime::now(),
-            last_keepalive_sent: SystemTime::now(),
             last_msg_time: SystemTime::now(),
+            last_msg_sent_time: SystemTime::now(),
             file: PeerFile::new(len),
         }
     }
@@ -110,7 +108,7 @@ impl ServerHandler for PeerServer {
             // messages that mutate the peer
             match msg {
                 PeerMsg::HandShake(..) => {}
-                PeerMsg::KeepAlive => peer.last_keepalive_recvd = SystemTime::now(),
+                PeerMsg::KeepAlive => {},
                 PeerMsg::Choke => {
                     peer.peer_choking = true;
                 }
@@ -186,7 +184,7 @@ impl PeerServer {
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
         let mut for_removal = Vec::new();
         for (&id, peer) in &self.peers {
-            match peer.last_keepalive_recvd.elapsed() {
+            match peer.last_msg_time.elapsed() {
                 Ok(duration) => {
                     if duration.as_secs() > TIMEOUT_SECONDS {
                         for_removal.push(id);
