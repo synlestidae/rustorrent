@@ -8,6 +8,7 @@ use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
+const KEEPALIVE_PERIOD: u64 = 30;
 
 pub struct PeerState {
     has_handshake: bool,
@@ -16,7 +17,9 @@ pub struct PeerState {
     peer_interested: bool,
     am_choking: bool,
     am_interested: bool,
-    last_keepalive: SystemTime,
+    last_keepalive_recvd: SystemTime,
+    last_keepalive_sent: SystemTime,
+    last_msg_time: SystemTime,
     file: PeerFile,
 }
 
@@ -29,7 +32,9 @@ impl PeerState {
             peer_interested: false,
             am_choking: true,
             am_interested: false,
-            last_keepalive: SystemTime::now(),
+            last_keepalive_recvd: SystemTime::now(),
+            last_keepalive_sent: SystemTime::now(),
+            last_msg_time: SystemTime::now(),
             file: PeerFile::new(len),
         }
     }
@@ -74,17 +79,21 @@ impl ServerHandler for PeerServer {
                 return PeerAction::Nothing;
             }
 
+            peer.last_msg_time = SystemTime::now();
+
             if !peer.has_handshake {
                 match msg {
                     PeerMsg::HandShake(_, ref their_hash, _) => {
                         if their_hash == &self.hash {
                             peer.has_handshake = true;
                         } else {
-                            peer.disconnected = false;
+                            peer.disconnected = true;
+                            return PeerAction::Disconnect;
                         }
-                        return PeerAction::Nothing;
                     }
-                    _ => peer.disconnected = true,
+                    _ => {
+                        peer.disconnected = true;
+                    }
                 }
             }
         }
@@ -101,7 +110,7 @@ impl ServerHandler for PeerServer {
             // messages that mutate the peer
             match msg {
                 PeerMsg::HandShake(..) => {}
-                PeerMsg::KeepAlive => peer.last_keepalive = SystemTime::now(),
+                PeerMsg::KeepAlive => peer.last_keepalive_recvd = SystemTime::now(),
                 PeerMsg::Choke => {
                     peer.peer_choking = true;
                 }
@@ -157,7 +166,7 @@ impl ServerHandler for PeerServer {
         PeerAction::Nothing
     }
 
-    //remove peers that have no replied in five minutes
+    // remove peers that have no replied in five minutes
     fn on_loop(&mut self) -> PeerAction {
         self._remove_old_peers();
         PeerAction::Nothing
@@ -166,7 +175,6 @@ impl ServerHandler for PeerServer {
 
 impl PeerServer {
     fn _remove_old_peers(&mut self) {
-
         let for_removal = self._get_timeout_ids();
 
         for id in for_removal {
@@ -177,18 +185,35 @@ impl PeerServer {
 
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
         let mut for_removal = Vec::new();
-            for (&id, peer) in &self.peers {
-                match peer.last_keepalive.elapsed() {
-                    Ok(duration) => {
-                        if duration.as_secs() > TIMEOUT_SECONDS {
-                            for_removal.push(id);
-                        }
-                    },
-                    _ => ()
+        for (&id, peer) in &self.peers {
+            match peer.last_keepalive_recvd.elapsed() {
+                Ok(duration) => {
+                    if duration.as_secs() > TIMEOUT_SECONDS {
+                        for_removal.push(id);
+                    }
                 }
+                _ => (),
             }
-            for_removal
+        }
+        for_removal
     }
+
+    fn _get_keepalive_ids(&self) -> Vec<PeerId> {
+        let mut for_keeping = Vec::new();
+        for (&id, peer) in &self.peers {
+            match peer.last_msg_time.elapsed() {
+                Ok(duration) => {
+                    if duration.as_secs() > KEEPALIVE_PERIOD {
+                        for_keeping.push(id);
+                    }
+                }
+                _ => (),
+            }
+        }
+        for_keeping
+    }
+
+
 
     fn _get_piece_from_req(&mut self, index: usize, begin: u32, offset: u32) -> Option<PeerMsg> {
         if self.partial_file.has_piece(index as usize) {

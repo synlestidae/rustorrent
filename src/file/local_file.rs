@@ -139,10 +139,6 @@ impl PieceCollection {
         }
 
         self.pieces[index].add(offset, &block);
-        // existing_block.resize(offset + block.len(), 0);
-        // for i in 0..block.len() {
-        //    existing_block.data[offset + i as usize] = block[i];
-        // }
         true
     }
 }
