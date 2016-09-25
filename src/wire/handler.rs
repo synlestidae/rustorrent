@@ -47,7 +47,8 @@ impl PeerHandler for BasicHandler {
 }
 
 pub type PeerId = u32;
-pub enum PeerAction {
+pub struct PeerAction(pub PeerId, pub PeerStreamAction);
+pub enum PeerStreamAction {
     Nothing,
     SendMessages(Vec<PeerMsg>),
     Disconnect,
@@ -58,5 +59,5 @@ pub trait ServerHandler {
     fn on_peer_connect(&mut self, PeerId) -> PeerAction;
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction;
     fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction;
-    fn on_loop(&mut self) -> PeerAction;
+    fn on_loop(&mut self) -> Vec<PeerAction>;
 }

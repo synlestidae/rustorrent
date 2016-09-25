@@ -1,4 +1,4 @@
-use wire::handler::{PeerId, PeerAction, ServerHandler};
+use wire::handler::{PeerId, PeerStreamAction, PeerAction, ServerHandler};
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 use file::PartialFile;
@@ -63,111 +63,24 @@ impl ServerHandler for PeerServer {
         let handshake = PeerMsg::handshake(PROTOCOL_ID.to_string(),
                                            self.our_peer_id.to_string(),
                                            &self.hash);
-        PeerAction::SendMessages(vec![handshake])
+
+        PeerAction(id, PeerStreamAction::SendMessages(vec![handshake]))
     }
 
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction {
-        {
-            let peer = match self.peers.get_mut(&id) {
-                Some(peer) => peer,
-                None => return PeerAction::Nothing,
-            };
-
-            if peer.disconnected {
-                return PeerAction::Nothing;
-            }
-
-            peer.last_msg_time = SystemTime::now();
-
-            if !peer.has_handshake {
-                match msg {
-                    PeerMsg::HandShake(_, ref their_hash, _) => {
-                        if their_hash == &self.hash {
-                            peer.has_handshake = true;
-                        } else {
-                            peer.disconnected = true;
-                            return PeerAction::Disconnect;
-                        }
-                    }
-                    _ => {
-                        peer.disconnected = true;
-                    }
-                }
-            }
-        }
-
-        let mut outgoing_msgs = Vec::new();
-        let mut handled = true;
-
-        {
-            let peer = match self.peers.get_mut(&id) {
-                Some(peer) => peer,
-                None => return PeerAction::Nothing,
-            };
-
-            // messages that mutate the peer
-            match msg {
-                PeerMsg::HandShake(..) => {}
-                PeerMsg::KeepAlive => {},
-                PeerMsg::Choke => {
-                    peer.peer_choking = true;
-                }
-                PeerMsg::Unchoke => {
-                    peer.peer_choking = false;
-                }
-                PeerMsg::Interested => {
-                    peer.peer_interested = true;
-                }
-                PeerMsg::NotInterested => {
-                    peer.peer_interested = false;
-                }
-                PeerMsg::Have(index) => peer.file.set(index as usize, true),
-                PeerMsg::Bitfield(_) => {}
-                _ => handled = false,
-            };
-        }
-
-        // messages that don't need to mutate peer
-        let choking = {
-            match self.peers.get(&id) {
-                Some(peer) => peer.am_choking,
-                None => return PeerAction::Nothing,
-            }
-        };
-
-        if !choking && !handled {
-            match msg {
-                PeerMsg::Request(index, begin, offset) => {
-                    let response = self._get_piece_from_req(index as usize, begin, offset);
-                    if response.is_some() {
-                        outgoing_msgs.push(response.unwrap());
-                    }
-                }
-                PeerMsg::Piece(index, begin, block) => {
-                    self.partial_file.add_piece(index as usize, begin as usize, block);
-                }
-                PeerMsg::Cancel(..) => {}
-                PeerMsg::Port(_) => {}
-                _ => handled = true,
-            }
-        }
-
-        if outgoing_msgs.len() > 0 {
-            PeerAction::SendMessages(outgoing_msgs)
-        } else {
-            PeerAction::Nothing
-        }
+        let msg =  self._on_message_receive(id, msg);
+        PeerAction(id, msg)
     }
 
     fn on_peer_disconnect(&mut self, id: PeerId) -> PeerAction {
         self.peers.remove(&id);
-        PeerAction::Nothing
+        PeerAction(id, PeerStreamAction::Nothing)
     }
 
     // remove peers that have no replied in five minutes
-    fn on_loop(&mut self) -> PeerAction {
+    fn on_loop(&mut self) -> Vec<PeerAction> {
         self._remove_old_peers();
-        PeerAction::Nothing
+        Vec::new()
     }
 }
 
@@ -225,5 +138,98 @@ impl PeerServer {
             };
         }
         None
+    }
+
+    fn _on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerStreamAction {
+        {
+            let peer = match self.peers.get_mut(&id) {
+                Some(peer) => peer,
+                None => return PeerStreamAction::Nothing,
+            };
+
+            if peer.disconnected {
+                return PeerStreamAction::Nothing;
+            }
+
+            peer.last_msg_time = SystemTime::now();
+
+            if !peer.has_handshake {
+                match msg {
+                    PeerMsg::HandShake(_, ref their_hash, _) => {
+                        if their_hash == &self.hash {
+                            peer.has_handshake = true;
+                        } else {
+                            peer.disconnected = true;
+                            return PeerStreamAction::Disconnect;
+                        }
+                    }
+                    _ => {
+                        peer.disconnected = true;
+                    }
+                }
+            }
+        }
+
+        let mut outgoing_msgs = Vec::new();
+        let mut handled = true;
+
+        {
+            let peer = match self.peers.get_mut(&id) {
+                Some(peer) => peer,
+                None => return PeerStreamAction::Nothing,
+            };
+
+            // messages that mutate the peer
+            match msg {
+                PeerMsg::HandShake(..) => {}
+                PeerMsg::KeepAlive => {},
+                PeerMsg::Choke => {
+                    peer.peer_choking = true;
+                }
+                PeerMsg::Unchoke => {
+                    peer.peer_choking = false;
+                }
+                PeerMsg::Interested => {
+                    peer.peer_interested = true;
+                }
+                PeerMsg::NotInterested => {
+                    peer.peer_interested = false;
+                }
+                PeerMsg::Have(index) => peer.file.set(index as usize, true),
+                PeerMsg::Bitfield(_) => {}
+                _ => handled = false,
+            };
+        }
+
+        // messages that don't need to mutate peer
+        let choking = {
+            match self.peers.get(&id) {
+                Some(peer) => peer.am_choking,
+                None => return PeerStreamAction::Nothing,
+            }
+        };
+
+        if !choking && !handled {
+            match msg {
+                PeerMsg::Request(index, begin, offset) => {
+                    let response = self._get_piece_from_req(index as usize, begin, offset);
+                    if response.is_some() {
+                        outgoing_msgs.push(response.unwrap());
+                    }
+                }
+                PeerMsg::Piece(index, begin, block) => {
+                    self.partial_file.add_piece(index as usize, begin as usize, block);
+                }
+                PeerMsg::Cancel(..) => {}
+                PeerMsg::Port(_) => {}
+                _ => handled = true,
+            }
+        }
+
+        if outgoing_msgs.len() > 0 {
+            PeerStreamAction::SendMessages(outgoing_msgs)
+        } else {
+            PeerStreamAction::Nothing
+        }
     }
 }
