@@ -5,26 +5,48 @@ use mio::channel::{Sender, Receiver};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
+
 use wire::handler::{BasicHandler, PeerHandler};
+use wire::data::PeerMsg;
 
 const OUTSIDE_MSG: Token = Token(0);
+type StreamId = u32;
 
-pub struct Protocol<H: PeerHandler> {
-    streams: HashMap<usize, TcpStream>,
+pub struct Protocol {
+    streams: HashMap<StreamId, (TcpStream, PeerStream)>,
     poll: Poll,
     sender: Sender<ChanMsg>,
     receiver: Receiver<ChanMsg>,
     info: MetaInfo,
-    info_hash: SHA1Hash20b,
-    handlers: Vec<Peer<H>>,
+    info_hash: SHA1Hash20b
 }
 
-struct Peer<H: PeerHandler> {
-    stream: TcpStream,
-    handler: H,
-    buffer: Vec<u8>,
+struct PeerStream {
+    id: StreamId,
+    bytes_in: Vec<u8>,
+    bytes_out: Vec<u8>
+}
+
+impl PeerStream {
+    fn write_in(&mut self, bytes: &[u8]) {
+        unimplemented!();
+    }
+
+    fn write_out(&mut self, bytes: &[u8]) {
+        unimplemented!();
+    }
+
+    fn message(&mut self) -> Option<PeerMsg> {
+        unimplemented!();
+    }
+
+    fn take(&mut self, len: usize) -> Vec<u8> {
+        unimplemented!();
+    }
+
 }
 
 #[derive(Debug)]
@@ -32,10 +54,10 @@ pub enum ChanMsg {
     NewPeer(IpAddr, u16),
 }
 
-impl<H: PeerHandler> Protocol<H> {
+impl Protocol {
     pub fn new(info: &MetaInfo,
                hash: SHA1Hash20b)
-               -> (Protocol<H>, Sender<ChanMsg>, Receiver<ChanMsg>) {
+               -> (Protocol, Sender<ChanMsg>, Receiver<ChanMsg>) {
         let poll = Poll::new().unwrap();
 
         match (channel(), channel()) {
@@ -53,8 +75,7 @@ impl<H: PeerHandler> Protocol<H> {
                     sender: to_outside,
                     receiver: from_outside,
                     info: info.clone(),
-                    info_hash: hash,
-                    handlers: Vec::new(),
+                    info_hash: hash
                 };
 
                 (proto, to_inside, from_inside)
@@ -80,17 +101,45 @@ impl<H: PeerHandler> Protocol<H> {
         }
     }
 
-    pub fn _handle_socket_event(&mut self, event: Event) {
+    fn _get_stream_id(&self, token: Token) -> Option<StreamId> {
+        unimplemented!()
+    }
+
+    fn _handle_socket_event(&mut self, event: Event) {
         let kind = event.kind();
-        if kind.is_readable() {
-            // read bytes of messages
+        let peer_id: StreamId = match self._get_stream_id(event.token()) {
+            Some(p_id) => p_id,
+            None => return
+        };
+
+        if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
+            if kind.is_readable() {
+                // read bytes of messages
+                self._handle_read(&mut tcp_stream, &mut peer_stream);
+            }
+            if kind.is_writable() {
+                // write pending messages
+                self._handle_write(&mut tcp_stream, &mut peer_stream);
+            }
+            if kind.is_hup() {
+                // remove socket and clean up
+                self._handle_hup(&mut tcp_stream,&mut  peer_stream);
+            }
+            self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
         }
-        if kind.is_writable() {
-            // write pending messages
-        }
-        if kind.is_hup() {
-            // remove socket and clean up
-        }
+
+    }
+
+    fn _handle_read(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
+
+    }
+
+    fn _handle_write(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
+
+    }
+
+    fn _handle_hup(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
+
     }
 
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
