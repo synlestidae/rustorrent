@@ -21,13 +21,13 @@ pub struct Protocol {
     sender: Sender<ChanMsg>,
     receiver: Receiver<ChanMsg>,
     info: MetaInfo,
-    info_hash: SHA1Hash20b
+    info_hash: SHA1Hash20b,
 }
 
 struct PeerStream {
     id: StreamId,
     bytes_in: Vec<u8>,
-    bytes_out: Vec<u8>
+    bytes_out: Vec<u8>,
 }
 
 impl PeerStream {
@@ -46,7 +46,6 @@ impl PeerStream {
     fn take(&mut self, len: usize) -> Vec<u8> {
         unimplemented!();
     }
-
 }
 
 #[derive(Debug)]
@@ -75,7 +74,7 @@ impl Protocol {
                     sender: to_outside,
                     receiver: from_outside,
                     info: info.clone(),
-                    info_hash: hash
+                    info_hash: hash,
                 };
 
                 (proto, to_inside, from_inside)
@@ -109,38 +108,32 @@ impl Protocol {
         let kind = event.kind();
         let peer_id: StreamId = match self._get_stream_id(event.token()) {
             Some(p_id) => p_id,
-            None => return
+            None => return,
         };
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
             if kind.is_readable() {
                 // read bytes of messages
-                self._handle_read(&mut tcp_stream, &mut peer_stream);
+                Protocol::_handle_read(&mut tcp_stream, &mut peer_stream);
             }
             if kind.is_writable() {
                 // write pending messages
-                self._handle_write(&mut tcp_stream, &mut peer_stream);
+                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream);
             }
             if kind.is_hup() {
                 // remove socket and clean up
-                self._handle_hup(&mut tcp_stream,&mut  peer_stream);
+                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream);
             }
             self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
         }
 
     }
 
-    fn _handle_read(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
+    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream) {}
 
-    }
+    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream) {}
 
-    fn _handle_write(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
-
-    }
-
-    fn _handle_hup(&mut self, socket: &mut TcpStream, peer: &mut PeerStream) {
-
-    }
+    fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream) {}
 
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
         match msg {

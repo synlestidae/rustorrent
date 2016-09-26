@@ -68,7 +68,7 @@ impl ServerHandler for PeerServer {
     }
 
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction {
-        let msg =  self._on_message_receive(id, msg);
+        let msg = self._on_message_receive(id, msg);
         PeerAction(id, msg)
     }
 
@@ -182,7 +182,7 @@ impl PeerServer {
             // messages that mutate the peer
             match msg {
                 PeerMsg::HandShake(..) => {}
-                PeerMsg::KeepAlive => {},
+                PeerMsg::KeepAlive => {}
                 PeerMsg::Choke => {
                     peer.peer_choking = true;
                 }
