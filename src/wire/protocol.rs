@@ -5,6 +5,7 @@ use mio::channel::{Sender, Receiver};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::io::Read;
 
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
@@ -31,11 +32,11 @@ struct PeerStream {
 }
 
 impl PeerStream {
-    fn write_in(&mut self, bytes: &[u8]) {
+    fn write_in(&mut self, bytes: Vec<u8>) {
         unimplemented!();
     }
 
-    fn write_out(&mut self, bytes: &[u8]) {
+    fn write_out(&mut self, bytes: Vec<u8>) {
         unimplemented!();
     }
 
@@ -129,7 +130,21 @@ impl Protocol {
 
     }
 
-    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream) {}
+    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream) {
+        let mut buf = Vec::new(); 
+        match socket.read(&mut buf) {
+            Ok(bytes) => {
+                peer.write_in(buf);
+            }
+            _ => (),
+        }
+        match peer.message() {
+            Some(msg) => {
+                //TODO: Take message and handle it
+            },
+            _ => ()
+        }
+    }
 
     fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream) {}
 
