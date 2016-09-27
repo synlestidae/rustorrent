@@ -12,12 +12,13 @@ use metainfo::SHA1Hash20b;
 
 use wire::handler::{BasicHandler, PeerHandler};
 use wire::data::PeerMsg;
+use wire::protocol_handler::PeerServer;
 
 const OUTSIDE_MSG: Token = Token(0);
 type StreamId = u32;
 
 pub struct Protocol {
-    streams: HashMap<StreamId, (TcpStream, PeerStream)>,
+    streams: HashMap<StreamId, (TcpStream, PeerStream, PeerServer)>,
     poll: Poll,
     sender: Sender<ChanMsg>,
     receiver: Receiver<ChanMsg>,
@@ -112,7 +113,7 @@ impl Protocol {
             None => return,
         };
 
-        if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
+        if let Some((mut tcp_stream, mut peer_stream, mut handler)) = self.streams.remove(&peer_id) {
             if kind.is_readable() {
                 // read bytes of messages
                 Protocol::_handle_read(&mut tcp_stream, &mut peer_stream);
@@ -125,7 +126,7 @@ impl Protocol {
                 // remove socket and clean up
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream);
             }
-            self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
+            self.streams.insert(peer_stream.id, (tcp_stream, peer_stream, handler));
         }
 
     }
