@@ -5,7 +5,7 @@ use mio::channel::{Sender, Receiver};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
-use std::io::Read;
+use std::io::{Read, Write};
 
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
@@ -13,6 +13,8 @@ use metainfo::SHA1Hash20b;
 use wire::handler::{BasicHandler, PeerHandler};
 use wire::data::PeerMsg;
 use wire::protocol_handler::PeerServer;
+use wire::handler::PeerAction;
+use wire::handler::ServerHandler;
 
 const OUTSIDE_MSG: Token = Token(0);
 type StreamId = u32;
@@ -24,6 +26,7 @@ pub struct Protocol {
     receiver: Receiver<ChanMsg>,
     info: MetaInfo,
     info_hash: SHA1Hash20b,
+    pending_actions: Vec<PeerAction>
 }
 
 struct PeerStream {
@@ -45,8 +48,24 @@ impl PeerStream {
         unimplemented!();
     }
 
-    fn take(&mut self, len: usize) -> Vec<u8> {
-        unimplemented!();
+    fn take(&mut self, out: &mut Write) -> bool {
+        const MAX_BYTES_WRITE: usize = 1024 * 16; 
+        let result = {
+            let out_ref = if self.bytes_out.len() < MAX_BYTES_WRITE {
+                &self.bytes_out
+            } else {
+                &self.bytes_out[0..MAX_BYTES_WRITE]
+            };
+            out.write(out_ref)
+        };
+        match result {
+            Ok(0) => false,
+            Ok(num_bytes) => {
+                self.bytes_out.split_off(num_bytes - 1);
+                true
+            },
+            _ => false
+        }
     }
 }
 
@@ -77,6 +96,7 @@ impl Protocol {
                     receiver: from_outside,
                     info: info.clone(),
                     info_hash: hash,
+                    pending_actions: Vec::new()
                 };
 
                 (proto, to_inside, from_inside)
@@ -116,22 +136,27 @@ impl Protocol {
         if let Some((mut tcp_stream, mut peer_stream, mut handler)) = self.streams.remove(&peer_id) {
             if kind.is_readable() {
                 // read bytes of messages
-                Protocol::_handle_read(&mut tcp_stream, &mut peer_stream);
+                match Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut handler) {
+                    Some(action) => unimplemented!(),
+                    None => ()
+                }
             }
             if kind.is_writable() {
                 // write pending messages
-                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream);
+                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut handler)
             }
             if kind.is_hup() {
                 // remove socket and clean up
-                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream);
+                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut handler);
             }
             self.streams.insert(peer_stream.id, (tcp_stream, peer_stream, handler));
         }
 
     }
 
-    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream) {
+    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
+        Option<PeerAction> {
+
         let mut buf = Vec::new(); 
         match socket.read(&mut buf) {
             Ok(bytes) => {
@@ -139,17 +164,15 @@ impl Protocol {
             }
             _ => (),
         }
-        match peer.message() {
-            Some(msg) => {
-                //TODO: Take message and handle it
-            },
-            _ => ()
-        }
+
+        peer.message().map(|msg| handler.on_message_receive(peer.id, msg))
     }
 
-    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream) {}
+    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {
+        peer.take(socket);
+    }
 
-    fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream) {}
+    fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {}
 
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
         match msg {
