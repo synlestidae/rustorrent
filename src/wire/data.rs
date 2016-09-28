@@ -110,6 +110,41 @@ impl Into<Vec<u8>> for PeerMsg {
     }
 }
 
+pub enum PeerError {
+    TooShort
+}
+
+pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), PeerError> {
+    if bytes.len() < 4 {
+        return Err(PeerError::TooShort);
+    }
+
+    let len = BigEndian::read_u32(&bytes[0..4]) as usize - 4;
+
+    if bytes.len() >= len || bytes.len() < 5 {
+        return Err(PeerError::TooShort);
+    }
+
+    match bytes[4] {
+        /*
+            &PeerMsg::KeepAlive => 0, //unreachable
+            &PeerMsg::HandShake(..) => 0, //unreachable
+            &PeerMsg::Choke => 0,
+            &PeerMsg::Unchoke => 1,
+            &PeerMsg::Interested => 2,
+            &PeerMsg::NotInterested => 3,
+            &PeerMsg::Have(_) => 4,
+            &PeerMsg::Bitfield(_) => 5,
+            &PeerMsg::Request(_, _, _) => 6,
+            &PeerMsg::Piece(_, _, _) => 7,
+            &PeerMsg::Cancel(_, _, _) => 8,
+            &PeerMsg::Port(_) => 9,
+           */
+        0 => Ok((PeerMsg::KeepAlive, 5)),
+        _ => unimplemented!()
+    }
+}
+
 impl TryFrom<Vec<u8>> for PeerMsg {
     type Err = ();
     fn try_from(vec: Vec<u8>) -> Result<Self, Self::Err> {

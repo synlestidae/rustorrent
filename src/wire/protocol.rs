@@ -36,20 +36,25 @@ struct PeerStream {
 }
 
 impl PeerStream {
-    fn write_in(&mut self, bytes: Vec<u8>) {
-        unimplemented!();
+    fn write_in(&mut self, mut bytes: Vec<u8>) {
+        self.bytes_in.append(&mut bytes);
     }
 
-    fn write_out(&mut self, bytes: Vec<u8>) {
-        unimplemented!();
+    fn write_out(&mut self, mut bytes: Vec<u8>) {
+        self.bytes_out.append(&mut bytes);
     }
 
     fn message(&mut self) -> Option<PeerMsg> {
+        if self.bytes_in.len() == 0 {
+            return None;
+        }
+        
         unimplemented!();
     }
 
-    fn take(&mut self, out: &mut Write) -> bool {
-        const MAX_BYTES_WRITE: usize = 1024 * 16; 
+    fn take(&mut self, out: &mut Write) -> usize {
+        const MAX_BYTES_WRITE: usize = 1024 * 128; 
+
         let result = {
             let out_ref = if self.bytes_out.len() < MAX_BYTES_WRITE {
                 &self.bytes_out
@@ -58,13 +63,14 @@ impl PeerStream {
             };
             out.write(out_ref)
         };
+
         match result {
-            Ok(0) => false,
+            Ok(0) => 0,
             Ok(num_bytes) => {
                 self.bytes_out.split_off(num_bytes - 1);
-                true
+                num_bytes
             },
-            _ => false
+            _ => 0
         }
     }
 }
@@ -143,11 +149,12 @@ impl Protocol {
             }
             if kind.is_writable() {
                 // write pending messages
-                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut handler)
+                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut handler);
             }
             if kind.is_hup() {
-                // remove socket and clean up
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut handler);
+                // to remove socket, only need to return early from this method 
+                return;
             }
             self.streams.insert(peer_stream.id, (tcp_stream, peer_stream, handler));
         }
@@ -168,8 +175,9 @@ impl Protocol {
         peer.message().map(|msg| handler.on_message_receive(peer.id, msg))
     }
 
-    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {
-        peer.take(socket);
+    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
+        usize {
+        peer.take(socket)
     }
 
     fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {}
