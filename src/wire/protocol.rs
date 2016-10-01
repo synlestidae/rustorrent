@@ -11,7 +11,7 @@ use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 
 use wire::handler::{BasicHandler, PeerHandler};
-use wire::data::PeerMsg;
+use wire::data::{PeerMsg, parse_peermsg};
 use wire::protocol_handler::PeerServer;
 use wire::handler::PeerAction;
 use wire::handler::ServerHandler;
@@ -33,6 +33,8 @@ struct PeerStream {
     id: StreamId,
     bytes_in: Vec<u8>,
     bytes_out: Vec<u8>,
+    handshake_sent: bool,
+    handshake_received: bool
 }
 
 impl PeerStream {
@@ -49,7 +51,20 @@ impl PeerStream {
             return None;
         }
         
-        unimplemented!();
+        match parse_peermsg(&self.bytes_in) {
+            Ok((msg, offset)) => {
+                if offset < self.bytes_in.len() {
+                    self.bytes_in.split_off(offset);
+                } else {
+                    self.bytes_in = Vec::new();
+                }
+                Some(msg)
+            },
+            Err(_) => {
+                //TODO It needs to distinguish between recoverable and non-recoverable
+                None
+            }
+        }
     }
 
     fn take(&mut self, out: &mut Write) -> usize {
