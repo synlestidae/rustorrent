@@ -110,39 +110,100 @@ impl Into<Vec<u8>> for PeerMsg {
     }
 }
 
-pub enum PeerError {
-    TooShort
+pub enum MsgParseError {
+    TooShort,
+    TooShortForId,
+    InvalidId
 }
 
-pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), PeerError> {
+pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
+    const LEN_LEN: usize = 4;
+    const INT_LEN: usize = 4;
+    const ID_LEN: usize = 1;
+    const PORT_LEN: usize = 2;
+
     if bytes.len() < 4 {
-        return Err(PeerError::TooShort);
+        return Err(MsgParseError::TooShort);
     }
 
     let len = BigEndian::read_u32(&bytes[0..4]) as usize - 4;
-
-    if bytes.len() >= len || bytes.len() < 5 {
-        return Err(PeerError::TooShort);
+    
+    if len == 0 {
+        return Ok((PeerMsg::KeepAlive, 4));
     }
 
-    match bytes[4] {
-        /*
-            &PeerMsg::KeepAlive => 0, //unreachable
-            &PeerMsg::HandShake(..) => 0, //unreachable
-            &PeerMsg::Choke => 0,
-            &PeerMsg::Unchoke => 1,
-            &PeerMsg::Interested => 2,
-            &PeerMsg::NotInterested => 3,
-            &PeerMsg::Have(_) => 4,
-            &PeerMsg::Bitfield(_) => 5,
-            &PeerMsg::Request(_, _, _) => 6,
-            &PeerMsg::Piece(_, _, _) => 7,
-            &PeerMsg::Cancel(_, _, _) => 8,
-            &PeerMsg::Port(_) => 9,
-           */
-        0 => Ok((PeerMsg::KeepAlive, 5)),
-        _ => unimplemented!()
+    if bytes.len() < (len - 1) || bytes.len() < 5 {
+        return Err(MsgParseError::TooShort);
     }
+
+    let bytes = &bytes[4..len];
+    let result = match bytes[0] {
+        0 => Ok(PeerMsg::Choke),
+        1 => Ok(PeerMsg::Unchoke),
+        2 => Ok(PeerMsg::Interested),
+        3 => Ok(PeerMsg::NotInterested),
+        4 => {
+            if len < ID_LEN + INT_LEN {
+                return Err(MsgParseError::TooShortForId);
+            } 
+            let piece_index = BigEndian::read_u32(&bytes[1..(1 + INT_LEN)]);
+            Ok(PeerMsg::Have(piece_index))
+        },
+        5 => {
+            let bitfield_bytes = &bytes[0..len];
+            Ok(PeerMsg::Bitfield(BitVec::from_bytes(bitfield_bytes)))
+        },
+        6 => {
+            if len != 13 {
+                return Err(MsgParseError::TooShortForId);
+            }
+
+            match _parse_three_u32(&bytes[1..1 + (INT_LEN * 3)]) {
+                (index, begin, end) => Ok((PeerMsg::Request(index, begin, end)))
+            }
+        },
+        7 => {
+            if len <= 9 {
+                return Err(MsgParseError::TooShortForId);
+            }
+            let index = BigEndian::read_u32(&bytes[1..(1 + INT_LEN)]);
+            let begin = BigEndian::read_u32(&bytes[(1+INT_LEN)..(1+INT_LEN*2)]);
+            let block = &bytes[(1+INT_LEN*2)..len];
+            let block_data = Vec::from(block);
+            Ok((PeerMsg::Piece(index, begin, block_data)))
+        },
+        8 => {
+            if len != 13 {
+                return Err(MsgParseError::TooShortForId);
+            }
+
+            match _parse_three_u32(&bytes[1..1 + (INT_LEN * 3)]) {
+                (index, begin, end) => Ok((PeerMsg::Cancel(index, begin, end)))
+            }
+        },
+        9 => {
+            if len != 3 {
+                return Err(MsgParseError::TooShortForId);
+            }
+            let port = BigEndian::read_u32(&bytes[1..(1+PORT_LEN)]);
+            Ok(PeerMsg::Port(port))
+        },
+        _ => Err(MsgParseError::InvalidId)
+    };
+
+    result.map(|msg| (msg, len + 4))
+}
+
+fn _parse_three_u32(bytes: &[u8]) -> (u32, u32, u32) {
+    let index = BigEndian::read_u32(&bytes[0..4]);
+    let begin = BigEndian::read_u32(&bytes[4..8]);
+    let end = BigEndian::read_u32(&bytes[8..12]);
+
+    (index, begin, end)
+}
+
+pub fn parse_handshake(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
+    unimplemented!()
 }
 
 impl TryFrom<Vec<u8>> for PeerMsg {
