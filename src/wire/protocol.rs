@@ -26,7 +26,8 @@ pub struct Protocol {
     receiver: Receiver<ChanMsg>,
     info: MetaInfo,
     info_hash: SHA1Hash20b,
-    pending_actions: Vec<PeerAction>
+    pending_actions: Vec<PeerAction>,
+    stats: Stats
 }
 
 struct PeerStream {
@@ -35,6 +36,22 @@ struct PeerStream {
     bytes_out: Vec<u8>,
     handshake_sent: bool,
     handshake_received: bool
+}
+
+pub struct Stats {
+    pub uploaded: usize,
+    pub downloaded: usize,
+    pub peer_count: usize
+}
+
+impl Stats {
+    fn new() -> Stats {
+        Stats {
+            uploaded: 0,
+            downloaded: 0,
+            peer_count: 0
+        }
+    }
 }
 
 impl PeerStream {
@@ -117,7 +134,8 @@ impl Protocol {
                     receiver: from_outside,
                     info: info.clone(),
                     info_hash: hash,
-                    pending_actions: Vec::new()
+                    pending_actions: Vec::new(),
+                    stats: Stats::new()
                 };
 
                 (proto, to_inside, from_inside)
@@ -157,10 +175,12 @@ impl Protocol {
         if let Some((mut tcp_stream, mut peer_stream, mut handler)) = self.streams.remove(&peer_id) {
             if kind.is_readable() {
                 // read bytes of messages
-                match Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut handler) {
+                let read_result = Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut handler);
+                match read_result.0 {
                     Some(action) => unimplemented!(),
                     None => ()
                 }
+                self.stats.uploaded += read_result.1;
             }
             if kind.is_writable() {
                 // write pending messages
@@ -177,17 +197,19 @@ impl Protocol {
     }
 
     fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
-        Option<PeerAction> {
+        (Option<PeerAction>, usize) {
 
         let mut buf = Vec::new(); 
-        match socket.read(&mut buf) {
-            Ok(bytes) => {
+        let bytes_read = match socket.read(&mut buf) {
+            Ok(bytes_read) => {
                 peer.write_in(buf);
+                bytes_read
             }
-            _ => (),
-        }
+            _ => 0
+        };
 
-        peer.message().map(|msg| handler.on_message_receive(peer.id, msg))
+        let action = peer.message().map(|msg| handler.on_message_receive(peer.id, msg));
+        (action, bytes_read)
     }
 
     fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
