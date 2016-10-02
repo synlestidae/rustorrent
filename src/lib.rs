@@ -7,8 +7,8 @@ extern crate bit_vec;
 pub mod bencode;
 pub mod metainfo;
 
-mod tracker;
-mod convert;
-mod tests;
-mod wire;
-mod file;
+pub mod tracker;
+pub mod convert;
+pub mod tests;
+pub mod wire;
+pub mod file;
