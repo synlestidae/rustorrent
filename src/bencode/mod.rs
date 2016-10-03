@@ -5,6 +5,7 @@ use std::num::ParseIntError;
 use self::DecodeErrorKind::*;
 use std::convert::From;
 use convert::TryFrom;
+use metainfo::SHA1Hash20b;
 
 pub mod decode;
 pub mod encode;
@@ -16,7 +17,7 @@ pub struct BInt(i64);
 #[derive(Eq, PartialEq, Clone)]
 pub struct BList(Vec<Bencode>);
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct BDict(BTreeMap<BString, Bencode>);
+pub struct BDict(BTreeMap<BString, Bencode>, SHA1Hash20b);
 
 impl TryFrom<Bencode> for BInt {
     type Err = DecodeError;
@@ -155,6 +156,10 @@ impl BDict {
             _ => None,
         }
     }
+
+    pub fn hash(&self) -> SHA1Hash20b {
+        self.1.clone()
+    }
 }
 
 impl BString {
@@ -236,7 +241,7 @@ impl fmt::Display for Bencode {
             Bencode::BString(ref s) => write!(f, "{}", s),
             Bencode::BInt(BInt(bint)) => write!(f, "{}", bint),
             Bencode::BList(ref l) => write!(f, "{:?}", l),
-            Bencode::BDict(BDict(ref bdict_map)) => write!(f, "{:?}", bdict_map),
+            Bencode::BDict(BDict(ref bdict_map, _)) => write!(f, "{:?}", bdict_map),
         }
     }
 }

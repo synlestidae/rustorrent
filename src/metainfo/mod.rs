@@ -10,6 +10,7 @@ pub struct MetaInfo {
     pub created_by: Option<String>,
     pub creation_date: Option<u32>,
     pub info: FileInfo,
+    pub original: Option<BDict>
 }
 
 #[derive(Debug)]
@@ -79,6 +80,7 @@ impl TryFrom<BDict> for MetaInfo {
         info.created_by = created_by;
         info.creation_date = creation_date.map(|bdict| bdict.to_i64() as u32);
         info.info = try!(MetaInfo::get_info(dict));
+
         Ok(info)
     }
 }
@@ -131,6 +133,7 @@ impl MetaInfo {
         }
 
         info.mode_info = ModeInfo::Multi(MultiFileInfo { files: files });
+        info.original = Some(bdict);
         Ok(info)
     }
 }
@@ -142,6 +145,7 @@ pub struct FileInfo {
     pub private: Option<u32>,
     pub name: Option<String>,
     pub mode_info: ModeInfo,
+    pub original: Option<BDict>
 }
 
 #[derive(Clone)]

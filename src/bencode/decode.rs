@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind};
+use sha1::Sha1;
 
 pub struct DecodeResult<T>(pub T, pub usize);
 
@@ -184,5 +185,8 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
             map.insert(key.0, value.0);
         }
     }
-    Ok(DecodeResult(BDict(map), position))
+    let mut sha1 = Sha1::new();
+    sha1.update(&bytes[0..position]);
+    let hash = sha1.digest().bytes().iter().map(|&x| x).collect::<Vec<u8>>();
+    Ok(DecodeResult(BDict(map, hash), position))
 }

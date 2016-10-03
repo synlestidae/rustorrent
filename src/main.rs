@@ -144,12 +144,20 @@ fn _start_tracker(hash: &SHA1Hash20b, info: &MetaInfo, peer_id: &SHA1Hash20b, se
 }
 
 fn _get_request_obj(hash: &SHA1Hash20b, peer_id: &SHA1Hash20b, info: &MetaInfo, stats: &Stats) ->  TrackerReq {
+    let mut info_hash = Vec::new();
+    info_hash.resize(20, 0);
+
+    match info.info.original {
+        Some(ref original_dict) => info_hash = original_dict.hash(),
+        _ => ()
+    };
+
     TrackerReq {
-        info_hash: hash.clone(),
+        info_hash: info_hash,
         peer_id: peer_id.clone(),
         port: DEFAULT_PORT,
-        uploaded: stats.uploaded as u64,
-        left: info.info.pieces.len() as u64 * info.info.piece_length,
+        uploaded: 0,
+        left: info.info.pieces.len() as u64,
         compact: false,
         no_peer_id: false,
         event: TrackerEvent::Started,
