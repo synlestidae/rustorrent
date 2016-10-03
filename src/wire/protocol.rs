@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 
+
 use wire::handler::{BasicHandler, PeerHandler};
 use wire::data::{PeerMsg, parse_peermsg};
 use wire::protocol_handler::PeerServer;
@@ -20,7 +21,8 @@ const OUTSIDE_MSG: Token = Token(0);
 type StreamId = u32;
 
 pub struct Protocol {
-    streams: HashMap<StreamId, (TcpStream, PeerStream, PeerServer)>,
+    streams: HashMap<StreamId, (TcpStream, PeerStream)>,
+    handler: PeerServer,
     poll: Poll,
     sender: Sender<ChanMsg>,
     receiver: Receiver<ChanMsg>,
@@ -38,6 +40,7 @@ struct PeerStream {
     handshake_received: bool
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Stats {
     pub uploaded: usize,
     pub downloaded: usize,
@@ -45,7 +48,7 @@ pub struct Stats {
 }
 
 impl Stats {
-    fn new() -> Stats {
+    pub fn new() -> Stats {
         Stats {
             uploaded: 0,
             downloaded: 0,
@@ -110,11 +113,14 @@ impl PeerStream {
 #[derive(Debug)]
 pub enum ChanMsg {
     NewPeer(IpAddr, u16),
+    StatsRequest,
+    StatsResponse(Stats)
 }
 
 impl Protocol {
     pub fn new(info: &MetaInfo,
-               hash: SHA1Hash20b)
+               hash: SHA1Hash20b, 
+               our_peer_id: &str)
                -> (Protocol, Sender<ChanMsg>, Receiver<ChanMsg>) {
         let poll = Poll::new().unwrap();
 
@@ -133,9 +139,10 @@ impl Protocol {
                     sender: to_outside,
                     receiver: from_outside,
                     info: info.clone(),
-                    info_hash: hash,
+                    info_hash: hash.clone(),
                     pending_actions: Vec::new(),
-                    stats: Stats::new()
+                    stats: Stats::new(),
+                    handler: ServerHandler::new(info.clone(), hash.clone(), our_peer_id)
                 };
 
                 (proto, to_inside, from_inside)
@@ -172,10 +179,10 @@ impl Protocol {
             None => return,
         };
 
-        if let Some((mut tcp_stream, mut peer_stream, mut handler)) = self.streams.remove(&peer_id) {
+        if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
             if kind.is_readable() {
                 // read bytes of messages
-                let read_result = Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut handler);
+                let read_result = Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 match read_result.0 {
                     Some(action) => unimplemented!(),
                     None => ()
@@ -184,14 +191,14 @@ impl Protocol {
             }
             if kind.is_writable() {
                 // write pending messages
-                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut handler);
+                Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
             }
             if kind.is_hup() {
-                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut handler);
+                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 // to remove socket, only need to return early from this method 
                 return;
             }
-            self.streams.insert(peer_stream.id, (tcp_stream, peer_stream, handler));
+            self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
         }
 
     }
@@ -222,6 +229,8 @@ impl Protocol {
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
         match msg {
             ChanMsg::NewPeer(ip, port) => self._connect_to_peer(ip, port),
+            ChanMsg::StatsRequest => { self.sender.send(ChanMsg::StatsResponse(self.stats)); }
+            _ => ()
         }
     }
 
