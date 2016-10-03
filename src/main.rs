@@ -149,7 +149,7 @@ fn _get_request_obj(hash: &SHA1Hash20b, peer_id: &SHA1Hash20b, info: &MetaInfo, 
 
     match info.info.original {
         Some(ref original_dict) => info_hash = original_dict.hash(),
-        _ => ()
+        None  => println!("No hash!")
     };
 
     TrackerReq {

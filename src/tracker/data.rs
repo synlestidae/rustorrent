@@ -48,7 +48,7 @@ fn convert_hash(hash: &SHA1Hash20b) -> String {
 impl TrackerReq {
     pub fn to_query_string_pairs(&self) -> Vec<(String, String)> {
         let mut pairs: Vec<(String, String)> = Vec::new();
-        pairs.push(("info_hash".to_string(), convert_hash(&self.info_hash)));
+        pairs.push(("info_hash".to_string(), url_encode(&self.info_hash)));
         pairs.push(("peer_id".to_string(), url_encode(&self.peer_id)));
         pairs.push(("port".to_string(), self.port.to_string()));
         pairs.push(("uploaded".to_string(), self.uploaded.to_string()));
