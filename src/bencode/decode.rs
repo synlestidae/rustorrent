@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use bencode::{Bencode, BString, BInt, BList, BDict, DecodeError, DecodeErrorKind};
 use sha1::Sha1;
+use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
+use std::collections::HashMap;
 
 pub struct DecodeResult<T>(pub T, pub usize);
 
@@ -178,11 +180,49 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
             break;
         } else {
             let key = try!(bstring_decode(&bytes[position..bytes.len()]));
+            println!("key {:?}", key.0);
             position += key.1;
-            let value_out = belement_decode(&bytes[position..bytes.len()]);
-            let value = try!(value_out);
-            position += value.1;
-            map.insert(key.0, value.0);
+            match belement_decode(&bytes[position..bytes.len()]) {
+                Ok(value) => {
+                    position += value.1;
+                    map.insert(key.0, value.0);
+                },
+                Err(_) => {
+                    println!("bad booboo");
+                    let mut peers: Vec<BDict> = Vec::new();
+                    let original_pos = position;
+                    let mut peer_map = BTreeMap::new();
+                    while position < bytes.len() {
+                        if position + 6 >= bytes.len() {
+                            return Err(DecodeError {
+                                position: None,
+                                kind: DecodeErrorKind::EndOfStream,
+                            });
+                        } else if position != bytes.len() {
+                            let ip = &bytes[position..position+4];
+                            let ip_string = format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]);
+                            let port = &bytes[position + 4..position+6];
+                            let port_u16 = BigEndian::read_u16(port);
+
+                            let port_element = Bencode::BInt(BInt::new(port_u16 as i64));
+                            let ip_element = Bencode::BString(BString::from_str(&ip_string));
+
+                            let ip_bstr = BString::from_str("ip"); 
+                            let port_bstr = BString::from_str("port"); 
+
+                            position += 6;
+
+                            peer_map.insert(ip_bstr, ip_element);
+                            peer_map.insert(port_bstr, port_element);
+                        } else {
+                            let orig = Vec::from(&bytes[original_pos..position]);
+                            let dict = BDict(peer_map, orig);
+                            map.insert(BString::from_str("peers"), Bencode::BDict(dict));
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
     let mut sha1 = Sha1::new();

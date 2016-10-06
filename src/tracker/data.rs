@@ -108,10 +108,10 @@ impl TryFrom<BDict> for TrackerResp {
     type Err = DecodeError;
     fn try_from(dict: BDict) -> Result<Self, Self::Err> {
         // required fields
-        let interval: BInt = try!(dict.get_copy("interval").ok_or(missing_field("interval")));
+        let interval: Option<BInt> = dict.get_copy("interval");
         let tracker_id = dict.get_copy("tracker id");
             //.ok_or(missing_field("tracker id")));
-        let complete: BInt = try!(dict.get_copy("complete").ok_or(missing_field("complete")));
+        let complete: Option<BInt> = dict.get_copy("complete");
 
         // optional fields
         let failure_reason: Option<String> = dict.get_copy("failure reason");
@@ -119,10 +119,13 @@ impl TryFrom<BDict> for TrackerResp {
         let min_interval: Option<BInt> = dict.get_copy("min interval");
 
         // parse the peer list
-        let peers_blist: Vec<BDict> = try!(dict.get_copy("peers").ok_or(missing_field("peers")));
+        let peers_list_result = dict.get_copy("peers");
+        println!("DITCT {:?}", dict);
+        println!("PEERS: {:?}", peers_list_result);
+        let peers_blist: Vec<BDict> = try!(peers_list_result.ok_or(missing_field("peers")));
         let mut peers_list = Vec::new();
         for peer in peers_blist {
-            let peer_id: String = try!(peer.get_copy("peer id").ok_or(missing_field("peer id")));
+            let peer_id: Option<String> = peer.get_copy("peer id");
             let peer_ip: String = try!(peer.get_copy("ip").ok_or(missing_field("ip")));
             let peer_port: BInt = try!(peer.get_copy("port").ok_or(missing_field("port")));
             let ip = try!(IpAddr::from_str(&peer_ip).map_err(|_| missing_field("ip")));
@@ -138,10 +141,10 @@ impl TryFrom<BDict> for TrackerResp {
         Ok(TrackerResp {
             failure_reason: failure_reason,
             warning_message: warning_message,
-            interval: interval.to_i64() as u32,
+            interval: interval.map(|i| i.to_i64() as u32),
             min_interval: min_interval.map(|i| i.to_i64() as u32),
             tracker_id: tracker_id,
-            complete: complete.to_i64() as u32,
+            complete: complete.map(|c| c.to_i64() as u32),
             peers: peers_list,
         })
     }
@@ -167,15 +170,15 @@ impl ToString for TrackerEvent {
 pub struct TrackerResp {
     pub failure_reason: Option<String>,
     pub warning_message: Option<String>,
-    pub interval: u32,
+    pub interval: Option<u32>,
     pub min_interval: Option<u32>,
     pub tracker_id: Option<String>,
-    pub complete: u32,
+    pub complete: Option<u32>,
     pub peers: Vec<Peer>,
 }
 
 pub struct Peer {
-    pub peer_id: String,
+    pub peer_id: Option<String>,
     pub ip: IpAddr,
     pub port: u32,
 }
