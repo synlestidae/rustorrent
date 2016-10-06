@@ -31,7 +31,7 @@ use mio::channel::{Sender, Receiver};
 use sha1::Sha1;
 
 const DEFAULT_PORT: u32 = 12001;
-const DEFAULT_PEER_ID : &'static str = "rustorrent-0.1";
+const DEFAULT_PEER_ID : &'static str = "-RT-0001-32320000000";
 
 
 pub fn main() {
@@ -157,6 +157,7 @@ fn _get_request_obj(hash: &SHA1Hash20b, peer_id: &SHA1Hash20b, info: &MetaInfo, 
         peer_id: peer_id.clone(),
         port: DEFAULT_PORT,
         uploaded: 0,
+        downloaded: 0,
         left: info.info.pieces.len() as u64,
         compact: false,
         no_peer_id: false,

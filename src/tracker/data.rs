@@ -10,6 +10,7 @@ pub struct TrackerReq {
     pub peer_id: SHA1Hash20b,
     pub port: u32,
     pub uploaded: u64,
+    pub downloaded: u64,
     pub left: u64,
     pub compact: bool,
     pub no_peer_id: bool,
@@ -52,6 +53,7 @@ impl TrackerReq {
         pairs.push(("peer_id".to_string(), url_encode(&self.peer_id)));
         pairs.push(("port".to_string(), self.port.to_string()));
         pairs.push(("uploaded".to_string(), self.uploaded.to_string()));
+        pairs.push(("downloaded".to_string(), self.downloaded.to_string()));
         pairs.push(("left".to_string(), self.left.to_string()));
         pairs.push(("compact".to_string(),
                     (if self.compact {
@@ -107,8 +109,8 @@ impl TryFrom<BDict> for TrackerResp {
     fn try_from(dict: BDict) -> Result<Self, Self::Err> {
         // required fields
         let interval: BInt = try!(dict.get_copy("interval").ok_or(missing_field("interval")));
-        let tracker_id: String = try!(dict.get_copy("tracker id")
-            .ok_or(missing_field("tracker id")));
+        let tracker_id = dict.get_copy("tracker id");
+            //.ok_or(missing_field("tracker id")));
         let complete: BInt = try!(dict.get_copy("complete").ok_or(missing_field("complete")));
 
         // optional fields
@@ -167,7 +169,7 @@ pub struct TrackerResp {
     pub warning_message: Option<String>,
     pub interval: u32,
     pub min_interval: Option<u32>,
-    pub tracker_id: String,
+    pub tracker_id: Option<String>,
     pub complete: u32,
     pub peers: Vec<Peer>,
 }
