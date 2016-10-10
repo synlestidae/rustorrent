@@ -3,6 +3,7 @@ extern crate byteorder;
 extern crate sha1;
 extern crate mio;
 extern crate bit_vec;
+extern crate log;
 
 pub mod bencode;
 pub mod metainfo;

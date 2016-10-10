@@ -29,7 +29,7 @@ pub struct Protocol {
     info_hash: SHA1Hash20b,
     pending_actions: Vec<PeerAction>,
     stats: Stats,
-    next_peer_id: usize
+    next_peer_id: usize,
 }
 
 struct PeerStream {
@@ -37,14 +37,14 @@ struct PeerStream {
     bytes_in: Vec<u8>,
     bytes_out: Vec<u8>,
     handshake_sent: bool,
-    handshake_received: bool
+    handshake_received: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct Stats {
     pub uploaded: usize,
     pub downloaded: usize,
-    pub peer_count: usize
+    pub peer_count: usize,
 }
 
 impl Stats {
@@ -52,7 +52,7 @@ impl Stats {
         Stats {
             uploaded: 0,
             downloaded: 0,
-            peer_count: 0
+            peer_count: 0,
         }
     }
 }
@@ -64,7 +64,7 @@ impl PeerStream {
             bytes_in: Vec::new(),
             bytes_out: Vec::new(),
             handshake_sent: false,
-            handshake_received: false 
+            handshake_received: false,
         }
     }
 
@@ -80,7 +80,7 @@ impl PeerStream {
         if self.bytes_in.len() == 0 {
             return None;
         }
-        
+
         match parse_peermsg(&self.bytes_in) {
             Ok((msg, offset)) => {
                 if offset < self.bytes_in.len() {
@@ -89,16 +89,16 @@ impl PeerStream {
                     self.bytes_in = Vec::new();
                 }
                 Some(msg)
-            },
+            }
             Err(_) => {
-                //TODO It needs to distinguish between recoverable and non-recoverable
+                // TODO It needs to distinguish between recoverable and non-recoverable
                 None
             }
         }
     }
 
     fn take(&mut self, out: &mut Write) -> usize {
-        const MAX_BYTES_WRITE: usize = 1024 * 128; 
+        const MAX_BYTES_WRITE: usize = 1024 * 128;
 
         let result = {
             let out_ref = if self.bytes_out.len() < MAX_BYTES_WRITE {
@@ -115,7 +115,7 @@ impl PeerStream {
             Ok(num_bytes) => {
                 self.bytes_out.split_off(num_bytes - 1);
                 num_bytes
-            },
+            }
             Err(err) => {
                 println!("Error writing to socket {:?}", err);
                 0
@@ -128,12 +128,12 @@ impl PeerStream {
 pub enum ChanMsg {
     NewPeer(IpAddr, u16),
     StatsRequest,
-    StatsResponse(Stats)
+    StatsResponse(Stats),
 }
 
 impl Protocol {
     pub fn new(info: &MetaInfo,
-               hash: SHA1Hash20b, 
+               hash: SHA1Hash20b,
                our_peer_id: &str)
                -> (Protocol, Sender<ChanMsg>, Receiver<ChanMsg>) {
         let poll = Poll::new().unwrap();
@@ -157,7 +157,7 @@ impl Protocol {
                     pending_actions: Vec::new(),
                     stats: Stats::new(),
                     handler: ServerHandler::new(info.clone(), hash.clone(), our_peer_id),
-                    next_peer_id: 1
+                    next_peer_id: 1,
                 };
 
                 (proto, to_inside, from_inside)
@@ -178,7 +178,7 @@ impl Protocol {
                                 _ => break,
                             }
                         }
-                   }
+                    }
                     _ => self._handle_socket_event(event),
                 }
             }
@@ -187,7 +187,7 @@ impl Protocol {
 
     fn _get_stream_id(&self, token: Token) -> Option<StreamId> {
         Some(match token {
-            Token(id) => id as StreamId
+            Token(id) => id as StreamId,
         })
     }
 
@@ -201,15 +201,15 @@ impl Protocol {
                     match self.streams.get_mut(&id) {
                         Some(&mut (_, ref mut peer)) => {
                             peer.write_out(bytes);
-                        },
+                        }
                         None => {
-                            //this peer already disconnected
+                            // this peer already disconnected
                         }
                     }
                 }
-            },
+            }
             PeerStreamAction::Disconnect => {
-               self.streams.remove(&id); 
+                self.streams.remove(&id);
             }
         }
     }
@@ -237,17 +237,19 @@ impl Protocol {
             if kind.is_writable() {
                 println!("Oooooh, writable {:?}", event);
                 // write pending messages
-                let b_written = Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+                let b_written =
+                    Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 println!("Wrote {} bytes", b_written);
             }
 
             if kind.is_readable() {
                 println!("Oooooh, readable {:?}", event);
                 // read bytes of messages
-                let read_result = Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+                let read_result =
+                    Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 match read_result.0 {
                     Some(action) => self._perform_action(action),
-                    None => ()
+                    None => (),
                 }
                 self.stats.uploaded += read_result.1;
             }
@@ -255,7 +257,7 @@ impl Protocol {
                 println!("Oooooh, disconnect {:?}", event);
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 self.poll.deregister(&tcp_stream);
-                // to remove socket, only need to return early from this method 
+                // to remove socket, only need to return early from this method
                 return;
             }
             self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
@@ -263,31 +265,35 @@ impl Protocol {
 
     }
 
-    fn _handle_read(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
-        (Option<PeerAction>, usize) {
+    fn _handle_read(socket: &mut TcpStream,
+                    peer: &mut PeerStream,
+                    handler: &mut PeerServer)
+                    -> (Option<PeerAction>, usize) {
 
-        let mut buf = Vec::new(); 
+        let mut buf = Vec::new();
         let bytes_read = match socket.read(&mut buf) {
             Ok(bytes_read) => {
                 peer.write_in(buf);
                 bytes_read
             }
-            _ => 0
+            _ => 0,
         };
 
         let action = match peer.message() {
-            Some(msg) => { 
+            Some(msg) => {
                 println!("Received from peer {:?}", msg);
                 Some(handler.on_message_receive(peer.id, msg))
-            },
-            _ => return (None, bytes_read)
+            }
+            _ => return (None, bytes_read),
         };
 
         (action, bytes_read)
     }
 
-    fn _handle_write(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) ->
-        usize {
+    fn _handle_write(socket: &mut TcpStream,
+                     peer: &mut PeerStream,
+                     handler: &mut PeerServer)
+                     -> usize {
         peer.take(socket)
     }
 
@@ -296,8 +302,10 @@ impl Protocol {
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
         match msg {
             ChanMsg::NewPeer(ip, port) => self._handle_new_peer(ip, port),
-            ChanMsg::StatsRequest => { self.sender.send(ChanMsg::StatsResponse(self.stats)); }
-            _ => ()
+            ChanMsg::StatsRequest => {
+                self.sender.send(ChanMsg::StatsResponse(self.stats));
+            }
+            _ => (),
         }
     }
 
@@ -310,16 +318,14 @@ impl Protocol {
                     if peer.port() == port && peer.ip().octets() == p.octets() {
                         return;
                     }
-                },
-                (Ok(SocketAddr::V6(peer)), IpAddr::V6(p)) => {
-                    unimplemented!()
-                },
+                }
+                (Ok(SocketAddr::V6(peer)), IpAddr::V6(p)) => unimplemented!(),
                 (Err(e), _) => {
-                    //println!("Error: {}", e);
-                    //self.poll.deregister(socket);
+                    // println!("Error: {}", e);
+                    // self.poll.deregister(socket);
                     continue;
-                }, 
-                _ => continue
+                } 
+                _ => continue,
             }
         }
 
@@ -334,8 +340,8 @@ impl Protocol {
                 let action = self.handler.on_peer_connect(id);
                 self._perform_action(action);
                 self.next_peer_id += 1;
-            },
-            None => ()
+            }
+            None => (),
         }
     }
 

@@ -111,7 +111,7 @@ impl TryFrom<BDict> for TrackerResp {
         // required fields
         let interval: Option<BInt> = dict.get_copy("interval");
         let tracker_id = dict.get_copy("tracker id");
-            //.ok_or(missing_field("tracker id")));
+        // .ok_or(missing_field("tracker id")));
         let complete: Option<BInt> = dict.get_copy("complete");
 
         // optional fields
@@ -125,7 +125,7 @@ impl TryFrom<BDict> for TrackerResp {
                 let mut peers_list = Vec::new();
                 let blist: Vec<BDict> = match Vec::try_from(Bencode::BList(blist_peers.clone())) {
                     Ok(x) => x,
-                    Err(_) => return Err(missing_field("peers"))
+                    Err(_) => return Err(missing_field("peers")),
                 };
                 for peer in blist {
                     let peer_id: Option<String> = peer.get_copy("peer id");
@@ -136,11 +136,11 @@ impl TryFrom<BDict> for TrackerResp {
                     peers_list.push(Peer {
                         peer_id: peer_id,
                         ip: ip,
-                        port: peer_port.to_i64() as u16
+                        port: peer_port.to_i64() as u16,
                     });
                 }
                 peers_list
-            },
+            }
             Some(&Bencode::BString(ref bsp)) => {
                 let bstring_peers = bsp.to_bytes();
                 let total = bstring_peers.len();
@@ -148,8 +148,10 @@ impl TryFrom<BDict> for TrackerResp {
                 if total % 6 == 0 {
                     let peer_count = total / 6;
                     for i in 0..peer_count {
-                        let ip = IpAddr::V4(Ipv4Addr::new(bstring_peers[i], 
-                            bstring_peers[i + 1], bstring_peers[i + 2], bstring_peers[i + 3]));
+                        let ip = IpAddr::V4(Ipv4Addr::new(bstring_peers[i],
+                                                          bstring_peers[i + 1],
+                                                          bstring_peers[i + 2],
+                                                          bstring_peers[i + 3]));
 
                         peers_list.push(Peer {
                             peer_id: None,
@@ -161,10 +163,10 @@ impl TryFrom<BDict> for TrackerResp {
                     return Err(missing_field("peers"));
                 }
                 peers_list
-            },
-            _ => return Err(missing_field("peers"))
+            }
+            _ => return Err(missing_field("peers")),
         };
-        
+
         // piece it together
         Ok(TrackerResp {
             failure_reason: failure_reason,
@@ -208,5 +210,5 @@ pub struct TrackerResp {
 pub struct Peer {
     pub peer_id: Option<String>,
     pub ip: IpAddr,
-    pub port: u16
+    pub port: u16,
 }

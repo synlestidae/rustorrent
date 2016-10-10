@@ -185,7 +185,7 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
                 Ok(value) => {
                     position += value.1;
                     map.insert(key.0, value.0);
-                },
+                }
                 Err(_) => {
                     let mut peers: Vec<BDict> = Vec::new();
                     let original_pos = position;
@@ -197,16 +197,16 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
                                 kind: DecodeErrorKind::EndOfStream,
                             });
                         } else if position != bytes.len() {
-                            let ip = &bytes[position..position+4];
+                            let ip = &bytes[position..position + 4];
                             let ip_string = format!("{}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]);
-                            let port = &bytes[position + 4..position+6];
+                            let port = &bytes[position + 4..position + 6];
                             let port_u16 = BigEndian::read_u16(port);
 
                             let port_element = Bencode::BInt(BInt::new(port_u16 as i64));
                             let ip_element = Bencode::BString(BString::from_str(&ip_string));
 
-                            let ip_bstr = BString::from_str("ip"); 
-                            let port_bstr = BString::from_str("port"); 
+                            let ip_bstr = BString::from_str("ip");
+                            let port_bstr = BString::from_str("port");
 
                             position += 6;
 

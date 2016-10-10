@@ -10,7 +10,7 @@ pub struct MetaInfo {
     pub created_by: Option<String>,
     pub creation_date: Option<u32>,
     pub info: FileInfo,
-    pub original: Option<BDict>
+    pub original: Option<BDict>,
 }
 
 #[derive(Debug)]
@@ -146,7 +146,7 @@ pub struct FileInfo {
     pub private: Option<u32>,
     pub name: Option<String>,
     pub mode_info: ModeInfo,
-    pub original: Option<BDict>
+    pub original: Option<BDict>,
 }
 
 #[derive(Clone)]

@@ -32,7 +32,7 @@ impl HttpTrackerHandler {
 pub enum TrackerError {
     Unknown,
     ParseError(DecodeError),
-    Http(String)
+    Http(String),
 }
 
 impl Error for TrackerError {
@@ -44,11 +44,13 @@ impl Error for TrackerError {
 impl fmt::Display for TrackerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &TrackerError::Unknown => { f.write_str("An unknown error occurred"); },
-            &TrackerError::ParseError(ref e) => { 
+            &TrackerError::Unknown => {
+                f.write_str("An unknown error occurred");
+            }
+            &TrackerError::ParseError(ref e) => {
                 f.write_str("Parse error: ");
                 f.write_str(&format!("{}", e));
-            },
+            }
             &TrackerError::Http(ref e) => {
                 f.write_str(e);
             }
@@ -74,10 +76,11 @@ impl TrackerHandler for HttpTrackerHandler {
             Ok(mut response) => {
                 let mut response_bytes = Vec::new();
                 response.read_to_end(&mut response_bytes);
-                let response_dict = match BDict::try_from(belement_decode(&response_bytes).unwrap().0) {
-                    Ok(bdict) => bdict,
-                    Err(error) => return Err(TrackerError::ParseError(error))
-                };
+                let response_dict =
+                    match BDict::try_from(belement_decode(&response_bytes).unwrap().0) {
+                        Ok(bdict) => bdict,
+                        Err(error) => return Err(TrackerError::ParseError(error)),
+                    };
                 let tracker_response: TrackerResp = TrackerResp::try_from(response_dict).unwrap();
                 Ok(tracker_response)
             }
