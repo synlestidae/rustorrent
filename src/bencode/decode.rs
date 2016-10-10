@@ -180,7 +180,6 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
             break;
         } else {
             let key = try!(bstring_decode(&bytes[position..bytes.len()]));
-            println!("key {:?}", key.0);
             position += key.1;
             match belement_decode(&bytes[position..bytes.len()]) {
                 Ok(value) => {
@@ -188,7 +187,6 @@ pub fn bdict_decode(bytes: &[u8]) -> Result<DecodeResult<BDict>, DecodeError> {
                     map.insert(key.0, value.0);
                 },
                 Err(_) => {
-                    println!("bad booboo");
                     let mut peers: Vec<BDict> = Vec::new();
                     let original_pos = position;
                     let mut peer_map = BTreeMap::new();

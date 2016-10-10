@@ -117,6 +117,7 @@ impl MetaInfo {
                 md5_sum: md5sum.map(|m| m.to_bytes()),
                 length: length.to_i64() as u64,
             });
+            info.original = Some(bdict);
             return Ok(info);
         }
 

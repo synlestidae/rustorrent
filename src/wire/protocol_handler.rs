@@ -4,7 +4,6 @@ use metainfo::SHA1Hash20b;
 use file::PartialFile;
 use std::collections::HashMap;
 use wire::data::PeerMsg;
-//use wire::handler::PeerAction;
 use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 

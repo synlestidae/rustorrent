@@ -6,6 +6,7 @@ use metainfo::SHA1Hash20b;
 use file::PartialFile;
 use bit_vec::BitVec;
 
+#[derive(Debug)]
 pub enum PeerMsg {
     // info hash, peer id
     HandShake(String, SHA1Hash20b, SHA1Hash20b),

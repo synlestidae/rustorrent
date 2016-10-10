@@ -1,9 +1,10 @@
 use std::net::IpAddr;
 use convert::TryFrom;
 use metainfo::SHA1Hash20b;
-use bencode::{BDict, BString, BInt, BList, DecodeError, DecodeErrorKind};
+use bencode::{Bencode, BDict, BString, BInt, BList, DecodeError, DecodeErrorKind};
 use std::str::FromStr;
 use std::string::ToString;
+use std::net::Ipv4Addr;
 
 pub struct TrackerReq {
     pub info_hash: SHA1Hash20b,
@@ -119,24 +120,51 @@ impl TryFrom<BDict> for TrackerResp {
         let min_interval: Option<BInt> = dict.get_copy("min interval");
 
         // parse the peer list
-        let peers_list_result = dict.get_copy("peers");
-        println!("DITCT {:?}", dict);
-        println!("PEERS: {:?}", peers_list_result);
-        let peers_blist: Vec<BDict> = try!(peers_list_result.ok_or(missing_field("peers")));
-        let mut peers_list = Vec::new();
-        for peer in peers_blist {
-            let peer_id: Option<String> = peer.get_copy("peer id");
-            let peer_ip: String = try!(peer.get_copy("ip").ok_or(missing_field("ip")));
-            let peer_port: BInt = try!(peer.get_copy("port").ok_or(missing_field("port")));
-            let ip = try!(IpAddr::from_str(&peer_ip).map_err(|_| missing_field("ip")));
+        let peers_list = match dict.get("peers") {
+            Some(&Bencode::BList(ref blist_peers)) => {
+                let mut peers_list = Vec::new();
+                let blist: Vec<BDict> = match Vec::try_from(Bencode::BList(blist_peers.clone())) {
+                    Ok(x) => x,
+                    Err(_) => return Err(missing_field("peers"))
+                };
+                for peer in blist {
+                    let peer_id: Option<String> = peer.get_copy("peer id");
+                    let peer_ip: String = try!(peer.get_copy("ip").ok_or(missing_field("ip")));
+                    let peer_port: BInt = try!(peer.get_copy("port").ok_or(missing_field("port")));
+                    let ip = try!(IpAddr::from_str(&peer_ip).map_err(|_| missing_field("ip")));
 
-            peers_list.push(Peer {
-                peer_id: peer_id,
-                ip: ip,
-                port: peer_port.to_i64() as u32,
-            });
-        }
+                    peers_list.push(Peer {
+                        peer_id: peer_id,
+                        ip: ip,
+                        port: peer_port.to_i64() as u16
+                    });
+                }
+                peers_list
+            },
+            Some(&Bencode::BString(ref bsp)) => {
+                let bstring_peers = bsp.to_bytes();
+                let total = bstring_peers.len();
+                let mut peers_list = Vec::new();
+                if total % 6 == 0 {
+                    let peer_count = total / 6;
+                    for i in 0..peer_count {
+                        let ip = IpAddr::V4(Ipv4Addr::new(bstring_peers[i], 
+                            bstring_peers[i + 1], bstring_peers[i + 2], bstring_peers[i + 3]));
 
+                        peers_list.push(Peer {
+                            peer_id: None,
+                            ip: ip,
+                            port: ((bstring_peers[4] as u16) << 8) + (bstring_peers[5] as u16),
+                        });
+                    }
+                } else {
+                    return Err(missing_field("peers"));
+                }
+                peers_list
+            },
+            _ => return Err(missing_field("peers"))
+        };
+        
         // piece it together
         Ok(TrackerResp {
             failure_reason: failure_reason,
@@ -180,5 +208,5 @@ pub struct TrackerResp {
 pub struct Peer {
     pub peer_id: Option<String>,
     pub ip: IpAddr,
-    pub port: u32,
+    pub port: u16
 }
