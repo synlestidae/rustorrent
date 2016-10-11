@@ -5,6 +5,7 @@ extern crate hyper;
 #[macro_use]
 extern crate log;
 
+use rustorrent::init;
 use rustorrent::bencode::decode::{belement_decode, DecodeResult};
 use rustorrent::bencode::BDict;
 use rustorrent::metainfo::{MetaInfo, SHA1Hash20b};
@@ -36,22 +37,8 @@ use sha1::Sha1;
 const DEFAULT_PORT: u32 = 12001;
 const DEFAULT_PEER_ID: &'static str = "-RT-0001-12340000000";
 
-use log::{LogRecord, LogLevel, LogMetadata};
-
-struct SimpleLogger;
-
-impl log::Log for SimpleLogger {
-    fn enabled(&self, metadata: &LogMetadata) -> bool {
-        return true; //metadata.level() <= LogLevel::Info
-    }
-
-    fn log(&self, record: &LogRecord) {
-        println!("{} - {}", record.level(), record.args());
-    }
-}
-
-
 pub fn main() {
+    init();
     let mut args = env::args();
     if let Some(path_string) = args.nth(1) {
         let result = _begin_with_path(path_string);
@@ -146,16 +133,17 @@ fn _start_tracker(hash: &SHA1Hash20b,
 
     loop {
         if need_request {
+            info!("Querying tracker...");
             let response_result = _get_tracker_response(hash, info, peer_id, &stats);
             match &result_response {
                 &Ok(ref r) => {
-                    println!("Querying tracker...");
+                    info!("Querying tracker...");
                     last_request_time = SystemTime::now();
                     for peer in r.peers.iter() {
                         let msg = ChanMsg::NewPeer(peer.ip, peer.port);
                         sender.send(msg);
                     }
-                    println!("Tracker has {} peers", r.peers.len());
+                    info!("Tracker has {} peers", r.peers.len());
                     if let Some(i) = r.interval {
                         interval = i as u64;
                     }
@@ -166,15 +154,13 @@ fn _start_tracker(hash: &SHA1Hash20b,
             };
         }
 
-        need_request = last_request_time.elapsed().unwrap().as_secs() > interval;
-
-        sender.send(ChanMsg::StatsRequest);
-        match recv.try_recv() {
-            Ok(ChanMsg::StatsResponse(new_stats)) => stats = new_stats,
-            _ => (),
-        }
-
-        thread::sleep(SLEEP_DURATION);
+        //need_request = last_request_time.elapsed().unwrap().as_secs() > interval;
+        //sender.send(ChanMsg::StatsRequest);
+        //match recv.try_recv() {
+        //    Ok(ChanMsg::StatsResponse(new_stats)) => stats = new_stats,
+        //    _ => (),
+        //}
+        thread::sleep(Duration::from_millis(100));
     }
 
     // TODO Implement this - goal is that it queries that tracker at a defined period

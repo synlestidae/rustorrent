@@ -45,7 +45,7 @@ pub struct PeerServer {
     partial_file: PartialFile,
 }
 
-const PROTOCOL_ID: &'static str = "rustorrent-beta";
+const PROTOCOL_ID: &'static str = "BitTorrent protocol";
 
 impl ServerHandler for PeerServer {
     fn new(metainfo: MetaInfo, hash: SHA1Hash20b, our_peer_id: &str) -> Self {
@@ -79,6 +79,7 @@ impl ServerHandler for PeerServer {
 
     // remove peers that have no replied in five minutes
     fn on_loop(&mut self) -> Vec<PeerAction> {
+        info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
         Vec::new()
     }
@@ -87,11 +88,9 @@ impl ServerHandler for PeerServer {
 impl PeerServer {
     fn _remove_old_peers(&mut self) {
         let for_removal = self._get_timeout_ids();
-
         for id in for_removal {
             self.peers.remove(&id);
         }
-
     }
 
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
@@ -142,6 +141,8 @@ impl PeerServer {
 
     fn _on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerStreamAction {
         {
+            info!("Received msg {:?} from id {}", msg, id);
+
             let peer = match self.peers.get_mut(&id) {
                 Some(peer) => peer,
                 None => return PeerStreamAction::Nothing,

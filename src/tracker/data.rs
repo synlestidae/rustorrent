@@ -156,7 +156,7 @@ impl TryFrom<BDict> for TrackerResp {
                         peers_list.push(Peer {
                             peer_id: None,
                             ip: ip,
-                            port: ((bstring_peers[4] as u16) << 8) + (bstring_peers[5] as u16),
+                            port: ((bstring_peers[i + 4] as u16) << 8) + (bstring_peers[i + 5] as u16),
                         });
                     }
                 } else {

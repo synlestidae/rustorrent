@@ -165,7 +165,8 @@ impl Protocol {
     }
 
     pub fn run(&mut self) {
-        let mut events = Events::with_capacity(1024);
+        const EVENT_CAPACITY: usize = 32;
+        let mut events = Events::with_capacity(EVENT_CAPACITY);
         loop {
             self.poll.poll(&mut events, None).unwrap();
             for event in events.iter() {
@@ -181,6 +182,7 @@ impl Protocol {
                     _ => self._handle_socket_event(event),
                 }
             }
+            self.handler.on_loop();
         }
     }
 
@@ -196,6 +198,7 @@ impl Protocol {
             PeerStreamAction::Nothing => (),
             PeerStreamAction::SendMessages(msgs) => {
                 for msg in msgs {
+                    info!("Writing message {:?}", msg);
                     let bytes: Vec<u8> = msg.into();
                     match self.streams.get_mut(&id) {
                         Some(&mut (_, ref mut peer)) => {
@@ -221,17 +224,6 @@ impl Protocol {
         };
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
-            info!("Event from peer: {:?}", tcp_stream.peer_addr());
-            if kind.is_error() {
-                let error = tcp_stream.take_error();
-                info!("Some kind of error {:?}", error);
-                if let Ok(err) = error {
-                    if let Some(c) = err {
-                        info!("Cause: {:?}", c.cause());
-                    }
-                }
-            }
-
             if kind.is_writable() {
                 // write pending messages
                 let b_written =
@@ -249,6 +241,7 @@ impl Protocol {
                 self.stats.uploaded += read_result.1;
             }
             if kind.is_hup() || kind.is_error() {
+                info!("Disconnected from peer id {}", peer_stream.id);
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 self.poll.deregister(&tcp_stream);
                 // to remove socket, only need to return early from this method
@@ -268,6 +261,7 @@ impl Protocol {
         let bytes_read = match socket.read(&mut buf) {
             Ok(bytes_read) => {
                 peer.write_in(buf);
+                info!("{} bytes from {}", bytes_read, peer.id);//, socket.peer_addr());
                 bytes_read
             }
             _ => 0,
@@ -304,8 +298,6 @@ impl Protocol {
     }
 
     fn _handle_new_peer(&mut self, addr: IpAddr, port: u16) {
-        let mut ids_to_remove = Vec::new();
-
         for (id, &(ref socket, _)) in &self.streams {
             match (socket.peer_addr(), addr) {
                 (Ok(SocketAddr::V4(peer)), IpAddr::V4(p)) => {
@@ -319,10 +311,6 @@ impl Protocol {
                 } 
                 _ => continue,
             }
-        }
-
-        for id in ids_to_remove {
-            self.streams.remove(&id);
         }
 
         match self._connect_to_peer(addr, port) {
