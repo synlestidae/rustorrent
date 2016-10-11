@@ -2,6 +2,7 @@ extern crate rustorrent;
 extern crate sha1;
 extern crate mio;
 extern crate hyper;
+#[macro_use]
 extern crate log;
 
 use rustorrent::bencode::decode::{belement_decode, DecodeResult};
@@ -35,20 +36,17 @@ use sha1::Sha1;
 const DEFAULT_PORT: u32 = 12001;
 const DEFAULT_PEER_ID: &'static str = "-RT-0001-12340000000";
 
-
 use log::{LogRecord, LogLevel, LogMetadata};
 
 struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &LogMetadata) -> bool {
-        metadata.level() <= LogLevel::Info
+        return true; //metadata.level() <= LogLevel::Info
     }
 
     fn log(&self, record: &LogRecord) {
-        if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
-        }
+        println!("{} - {}", record.level(), record.args());
     }
 }
 

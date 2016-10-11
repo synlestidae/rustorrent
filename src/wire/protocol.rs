@@ -7,7 +7,6 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::io::{Read, Write};
 use std::error::Error;
-
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 
@@ -106,7 +105,7 @@ impl PeerStream {
             } else {
                 &self.bytes_out[0..MAX_BYTES_WRITE]
             };
-            println!("Trying to write {} bytes", out_ref.len());
+            info!("Attempting to write {} bytes", out_ref.len());
             out.write(out_ref)
         };
 
@@ -117,7 +116,7 @@ impl PeerStream {
                 num_bytes
             }
             Err(err) => {
-                println!("Error writing to socket {:?}", err);
+                info!("Error writing to socket {:?}", err);
                 0
             }
         }
@@ -215,7 +214,6 @@ impl Protocol {
     }
 
     fn _handle_socket_event(&mut self, event: Event) {
-        println!("Event: {:?}", event);
         let kind = event.kind();
         let peer_id: StreamId = match self._get_stream_id(event.token()) {
             Some(p_id) => p_id,
@@ -223,27 +221,24 @@ impl Protocol {
         };
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
-            println!("Event for {:?}", tcp_stream.peer_addr());
+            info!("Event from peer: {:?}", tcp_stream.peer_addr());
             if kind.is_error() {
                 let error = tcp_stream.take_error();
-                println!("Some kind of error {:?}", error);
+                info!("Some kind of error {:?}", error);
                 if let Ok(err) = error {
                     if let Some(c) = err {
-                        println!("Cause: {:?}", c.cause());
+                        info!("Cause: {:?}", c.cause());
                     }
                 }
             }
 
             if kind.is_writable() {
-                println!("Oooooh, writable {:?}", event);
                 // write pending messages
                 let b_written =
                     Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
-                println!("Wrote {} bytes", b_written);
             }
 
             if kind.is_readable() {
-                println!("Oooooh, readable {:?}", event);
                 // read bytes of messages
                 let read_result =
                     Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
@@ -254,7 +249,6 @@ impl Protocol {
                 self.stats.uploaded += read_result.1;
             }
             if kind.is_hup() || kind.is_error() {
-                println!("Oooooh, disconnect {:?}", event);
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 self.poll.deregister(&tcp_stream);
                 // to remove socket, only need to return early from this method
@@ -281,7 +275,7 @@ impl Protocol {
 
         let action = match peer.message() {
             Some(msg) => {
-                println!("Received from peer {:?}", msg);
+                info!("Received from peer {:?}", msg);
                 Some(handler.on_message_receive(peer.id, msg))
             }
             _ => return (None, bytes_read),
@@ -321,8 +315,6 @@ impl Protocol {
                 }
                 (Ok(SocketAddr::V6(peer)), IpAddr::V6(p)) => unimplemented!(),
                 (Err(e), _) => {
-                    // println!("Error: {}", e);
-                    // self.poll.deregister(socket);
                     continue;
                 } 
                 _ => continue,
@@ -347,15 +339,20 @@ impl Protocol {
 
     fn _connect_to_peer(&mut self, addr: IpAddr, port: u16) -> Option<TcpStream> {
         let sock_addr = SocketAddr::new(addr, port);
-        if let Ok(sock) = TcpStream::connect(&sock_addr) {
-            self.poll
-                .register(&sock,
-                          Token(self.next_peer_id),
-                          Ready::all(),
-                          PollOpt::edge());
-            println!("Connected to {} on port {}", addr, port);
-            return Some(sock);
+        info!("Trying to connect to {} on port {}", addr, port);
+        match TcpStream::connect(&sock_addr) {
+            Ok(sock) => {
+                self.poll
+                    .register(&sock,
+                              Token(self.next_peer_id),
+                              Ready::all(),
+                              PollOpt::edge());
+                return Some(sock);
+            },
+            Err(e) => {
+                info!("Could not connect: {}", e);
+                return None;
+            }
         }
-        return None;
     }
 }
