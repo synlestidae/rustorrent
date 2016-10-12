@@ -133,7 +133,6 @@ fn _start_tracker(hash: &SHA1Hash20b,
 
     loop {
         if need_request {
-            info!("Querying tracker...");
             let response_result = _get_tracker_response(hash, info, peer_id, &stats);
             match &result_response {
                 &Ok(ref r) => {
@@ -154,13 +153,16 @@ fn _start_tracker(hash: &SHA1Hash20b,
             };
         }
 
+        info!("Interval between requests is {} second(s)", interval);
+
         //need_request = last_request_time.elapsed().unwrap().as_secs() > interval;
         //sender.send(ChanMsg::StatsRequest);
         //match recv.try_recv() {
         //    Ok(ChanMsg::StatsResponse(new_stats)) => stats = new_stats,
         //    _ => (),
         //}
-        thread::sleep(Duration::from_millis(100));
+
+        thread::sleep(Duration::from_millis(interval * 1000));
     }
 
     // TODO Implement this - goal is that it queries that tracker at a defined period
