@@ -25,7 +25,7 @@ pub struct PeerState {
 impl PeerState {
     pub fn new(len: usize) -> PeerState {
         PeerState {
-            has_handshake: false,
+            has_handshake: true,
             disconnected: false,
             peer_choking: true,
             peer_interested: false,
@@ -43,12 +43,14 @@ pub struct PeerServer {
     hash: SHA1Hash20b,
     our_peer_id: String,
     partial_file: PartialFile,
+    num_pieces: usize
 }
 
 const PROTOCOL_ID: &'static str = "BitTorrent protocol";
 
 impl ServerHandler for PeerServer {
     fn new(metainfo: MetaInfo, hash: SHA1Hash20b, our_peer_id: &str) -> Self {
+        let num_pieces = metainfo.info.pieces.len();
         let partial_file = PartialFile::new(&metainfo.info);
 
         PeerServer {
@@ -56,15 +58,18 @@ impl ServerHandler for PeerServer {
             hash: hash,
             our_peer_id: our_peer_id.to_string(),
             partial_file: partial_file,
+            num_pieces: num_pieces
         }
     }
 
     fn on_peer_connect(&mut self, id: PeerId) -> PeerAction {
+        self.peers.insert(id, PeerState::new(self.num_pieces));
+
         let handshake = PeerMsg::handshake(PROTOCOL_ID.to_string(),
                                            self.our_peer_id.to_string(),
                                            &self.hash);
 
-        PeerAction(id, PeerStreamAction::SendMessages(vec![handshake]))
+        PeerAction(id, PeerStreamAction::SendMessages(vec![handshake, PeerMsg::Interested, PeerMsg::Unchoke]))
     }
 
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction {

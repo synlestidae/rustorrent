@@ -127,41 +127,30 @@ fn _start_tracker(hash: &SHA1Hash20b,
     let SLEEP_DURATION: Duration = Duration::from_millis(100);
     let mut stats = Stats::new();
     let mut last_request_time: SystemTime = SystemTime::now();
-    let mut need_request = true;
     let mut result_response = _get_tracker_response(hash, info, peer_id, &stats);
     let mut interval: u64 = DEFAULT_TRACKER_INTERVAL_SECONDS;
 
     loop {
-        if need_request {
-            let response_result = _get_tracker_response(hash, info, peer_id, &stats);
-            match &result_response {
-                &Ok(ref r) => {
-                    info!("Querying tracker...");
-                    last_request_time = SystemTime::now();
-                    for peer in r.peers.iter() {
-                        let msg = ChanMsg::NewPeer(peer.ip, peer.port);
-                        sender.send(msg);
-                    }
-                    info!("Tracker has {} peers", r.peers.len());
-                    if let Some(i) = r.interval {
-                        interval = i as u64;
-                    }
+        let response_result = _get_tracker_response(hash, info, peer_id, &stats);
+        match &result_response {
+            &Ok(ref r) => {
+                info!("Querying tracker...");
+                last_request_time = SystemTime::now();
+                for peer in r.peers.iter() {
+                    let msg = ChanMsg::NewPeer(peer.ip, peer.port);
+                    sender.send(msg);
                 }
-                &Err(ref err) => {
-                    continue;
+                info!("Tracker has {} peers", r.peers.len());
+                if let Some(i) = r.interval {
+                    interval = i as u64;
                 }
-            };
-        }
+            }
+            &Err(ref err) => {
+                continue;
+            }
+        };
 
         info!("Interval between requests is {} second(s)", interval);
-
-        //need_request = last_request_time.elapsed().unwrap().as_secs() > interval;
-        //sender.send(ChanMsg::StatsRequest);
-        //match recv.try_recv() {
-        //    Ok(ChanMsg::StatsResponse(new_stats)) => stats = new_stats,
-        //    _ => (),
-        //}
-
         thread::sleep(Duration::from_millis(interval * 1000));
     }
 

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::io::{Read, Write};
+use std::io;
 use std::error::Error;
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
@@ -96,30 +97,22 @@ impl PeerStream {
         }
     }
 
-    fn take(&mut self, out: &mut Write) -> usize {
+    fn take(&mut self, out: &mut Write) -> io::Result<usize> {
         const MAX_BYTES_WRITE: usize = 1024 * 128;
-
-        let result = {
-            let out_ref = if self.bytes_out.len() < MAX_BYTES_WRITE {
-                &self.bytes_out
-            } else {
-                &self.bytes_out[0..MAX_BYTES_WRITE]
-            };
-            info!("Attempting to write {} bytes", out_ref.len());
-            out.write(out_ref)
-        };
-
-        match result {
+        info!("Attempting to write {} bytes", self.bytes_out.len());
+        out.write(&self.bytes_out) 
+        /*match out.write(&self.bytes_out) {
             Ok(0) => 0,
             Ok(num_bytes) => {
+                info!("Sucessfully wrote {} bytes", num_bytes);
                 self.bytes_out.split_off(num_bytes - 1);
                 num_bytes
             }
             Err(err) => {
                 info!("Error writing to socket {:?}", err);
-                0
+                Err(err)
             }
-        }
+        }*/
     }
 }
 
@@ -224,29 +217,39 @@ impl Protocol {
         };
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
-            if kind.is_writable() {
-                // write pending messages
-                let b_written =
-                    Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
-            }
+            info!("Got event {:?} from peer id {}", event, peer_id);
 
-            if kind.is_readable() {
+            /*if kind.is_readable() || true {*/
                 // read bytes of messages
                 let read_result =
                     Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+
                 match read_result.0 {
                     Some(action) => self._perform_action(action),
                     None => (),
                 }
                 self.stats.uploaded += read_result.1;
+            /*}*/
+
+            let mut fatal_error_happened = false;
+
+            if kind.is_writable() {
+                // write pending messages
+                let write_result =
+                    Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+                if !write_result.is_ok() {
+                    fatal_error_happened = true;
+                }
             }
-            if kind.is_hup() || kind.is_error() {
+
+            if kind.is_hup() || kind.is_error() || fatal_error_happened {
                 info!("Disconnected from peer id {}", peer_stream.id);
-                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 self.poll.deregister(&tcp_stream);
+                Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
                 // to remove socket, only need to return early from this method
                 return;
             }
+
             self.streams.insert(peer_stream.id, (tcp_stream, peer_stream));
         }
 
@@ -256,12 +259,11 @@ impl Protocol {
                     peer: &mut PeerStream,
                     handler: &mut PeerServer)
                     -> (Option<PeerAction>, usize) {
-
         let mut buf = Vec::new();
         let bytes_read = match socket.read(&mut buf) {
             Ok(bytes_read) => {
                 peer.write_in(buf);
-                info!("{} bytes from {}", bytes_read, peer.id);//, socket.peer_addr());
+                info!("Read {} bytes from {}", bytes_read, peer.id);//, socket.peer_addr());
                 bytes_read
             }
             _ => 0,
@@ -275,17 +277,21 @@ impl Protocol {
             _ => return (None, bytes_read),
         };
 
+        info!("Read {} bytes", bytes_read);
+
         (action, bytes_read)
     }
 
     fn _handle_write(socket: &mut TcpStream,
                      peer: &mut PeerStream,
                      handler: &mut PeerServer)
-                     -> usize {
-        peer.take(socket)
+                     -> io::Result<usize> {
+        peer.take(socket) 
     }
 
-    fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {}
+    fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {
+        handler.on_peer_disconnect(peer.id); 
+    }
 
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
         match msg {
