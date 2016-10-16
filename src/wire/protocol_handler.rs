@@ -69,7 +69,7 @@ impl ServerHandler for PeerServer {
                                            self.our_peer_id.to_string(),
                                            &self.hash);
 
-        PeerAction(id, PeerStreamAction::SendMessages(vec![handshake, PeerMsg::Interested, PeerMsg::Unchoke]))
+        PeerAction(id, PeerStreamAction::SendMessages(vec![handshake]))
     }
 
     fn on_message_receive(&mut self, id: PeerId, msg: PeerMsg) -> PeerAction {
@@ -163,9 +163,12 @@ impl PeerServer {
                 match msg {
                     PeerMsg::HandShake(_, ref their_hash, _) => {
                         if their_hash == &self.hash {
+                            info!("Hashes match, sending interested message now");
                             peer.has_handshake = true;
+                            return PeerStreamAction::SendMessages(vec![PeerMsg::Interested]);
                         } else {
                             peer.disconnected = true;
+                            info!("Message from peer should have been handshake");
                             return PeerStreamAction::Disconnect;
                         }
                     }
@@ -219,8 +222,9 @@ impl PeerServer {
             match msg {
                 PeerMsg::Request(index, begin, offset) => {
                     let response = self._get_piece_from_req(index as usize, begin, offset);
-                    if response.is_some() {
-                        outgoing_msgs.push(response.unwrap());
+                    match response {
+                        Some(r) =>  outgoing_msgs.push(r),
+                        _ => ()
                     }
                 }
                 PeerMsg::Piece(index, begin, block) => {
@@ -231,6 +235,8 @@ impl PeerServer {
                 _ => handled = true,
             }
         }
+
+        info!("We have messages to send: {:?}", outgoing_msgs);
 
         if outgoing_msgs.len() > 0 {
             PeerStreamAction::SendMessages(outgoing_msgs)

@@ -101,18 +101,6 @@ impl PeerStream {
         const MAX_BYTES_WRITE: usize = 1024 * 128;
         info!("Attempting to write {} bytes", self.bytes_out.len());
         out.write(&self.bytes_out) 
-        /*match out.write(&self.bytes_out) {
-            Ok(0) => 0,
-            Ok(num_bytes) => {
-                info!("Sucessfully wrote {} bytes", num_bytes);
-                self.bytes_out.split_off(num_bytes - 1);
-                num_bytes
-            }
-            Err(err) => {
-                info!("Error writing to socket {:?}", err);
-                Err(err)
-            }
-        }*/
     }
 }
 
@@ -218,26 +206,23 @@ impl Protocol {
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
             info!("Got event {:?} from peer id {}", event, peer_id);
+            let read_result =
+                Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
 
-            /*if kind.is_readable() || true {*/
-                // read bytes of messages
-                let read_result =
-                    Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+            match read_result.0 {
+                Some(action) => self._perform_action(action),
+                None => (),
+            }
 
-                match read_result.0 {
-                    Some(action) => self._perform_action(action),
-                    None => (),
-                }
-                self.stats.uploaded += read_result.1;
-            /*}*/
+            self.stats.uploaded += read_result.1;
 
             let mut fatal_error_happened = false;
-
             if kind.is_writable() {
                 // write pending messages
                 let write_result =
                     Protocol::_handle_write(&mut tcp_stream, &mut peer_stream, &mut self.handler);
-                if !write_result.is_ok() {
+
+                if write_result.is_err() {
                     fatal_error_happened = true;
                 }
             }
@@ -246,7 +231,8 @@ impl Protocol {
                 info!("Disconnected from peer id {}", peer_stream.id);
                 self.poll.deregister(&tcp_stream);
                 Protocol::_handle_hup(&mut tcp_stream, &mut peer_stream, &mut self.handler);
-                // to remove socket, only need to return early from this method
+
+                // do not return socket to collection
                 return;
             }
 

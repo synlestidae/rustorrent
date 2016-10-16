@@ -102,7 +102,12 @@ fn _begin_with_path(path_string: String) -> Result<SuccessType, FatalError> {
 
 
 fn _begin_protocol_session(info: &MetaInfo, hash: SHA1Hash20b) {
-    match Protocol::new(info, hash.clone(), DEFAULT_PEER_ID) {
+    let real_hash = match info.info.original {
+        Some(ref original_dict) => original_dict.hash(),
+        None => panic!("No freaking hash!"),
+    };
+
+    match Protocol::new(info, real_hash.clone(), DEFAULT_PEER_ID) {
         (protocol, sender, receiver) => {
             let pwp = _start_peer_wire_protocol_thread(protocol);
             _start_tracker(&hash,
