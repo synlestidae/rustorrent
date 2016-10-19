@@ -25,7 +25,7 @@ pub struct PeerState {
 impl PeerState {
     pub fn new(len: usize) -> PeerState {
         PeerState {
-            has_handshake: true,
+            has_handshake: false,
             disconnected: false,
             peer_choking: true,
             peer_interested: false,
@@ -160,15 +160,17 @@ impl PeerServer {
             peer.last_msg_time = SystemTime::now();
 
             if !peer.has_handshake {
+                info!("Do not have handshake yet");
                 match msg {
                     PeerMsg::HandShake(_, ref their_hash, _) => {
                         if their_hash == &self.hash {
                             info!("Hashes match, sending interested message now");
                             peer.has_handshake = true;
-                            return PeerStreamAction::SendMessages(vec![PeerMsg::Unchoke, PeerMsg::Interested]);
+                            return PeerStreamAction::SendMessages(vec![PeerMsg::Unchoke,
+                                                                       PeerMsg::Interested]);
                         } else {
                             peer.disconnected = true;
-                            info!("Message from peer should have been handshake");
+                            info!("Handshake info hash does not match");
                             return PeerStreamAction::Disconnect;
                         }
                     }
