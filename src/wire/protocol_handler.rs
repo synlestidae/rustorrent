@@ -165,7 +165,7 @@ impl PeerServer {
                         if their_hash == &self.hash {
                             info!("Hashes match, sending interested message now");
                             peer.has_handshake = true;
-                            return PeerStreamAction::SendMessages(vec![PeerMsg::Interested]);
+                            return PeerStreamAction::SendMessages(vec![PeerMsg::Unchoke, PeerMsg::Interested]);
                         } else {
                             peer.disconnected = true;
                             info!("Message from peer should have been handshake");

@@ -276,27 +276,26 @@ impl Protocol {
             Err(err) => 0,
         };
 
-        if !peer.handshake_received {
-            info!("Handshake not yet received: {:?}",
-                  if peer.bytes_in.len() > 80 {
-                      &peer.bytes_in[0..80]
-                  } else {
-                      &peer.bytes_in
-                  });
+
+        // Attempt to parse a handshake first
+        let msg = if peer.handshake_received {
+            peer.message()
+        } else {
             match parse_handshake(&peer.bytes_in) {
                 Ok((handshake, offset)) => {
                     peer.handshake_received = true;
                     peer.bytes_in.split_off(offset);
                     info!("Handshake received: {:?}", handshake);
+                    Some(handshake)
                 }
                 Err(e) => {
                     info!("Error parsing handshake: {:?}", e);
-                    return (None, bytes_read);
+                    None
                 }
             }
-        }
+        };
 
-        let action = match peer.message() {
+        let action = match msg {
             Some(msg) => {
                 info!("Received from peer {:?}", msg);
                 Some(handler.on_message_receive(peer.id, msg))
