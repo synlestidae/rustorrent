@@ -43,7 +43,7 @@ pub struct PeerServer {
     hash: SHA1Hash20b,
     our_peer_id: String,
     partial_file: PartialFile,
-    num_pieces: usize
+    num_pieces: usize,
 }
 
 const PROTOCOL_ID: &'static str = "BitTorrent protocol";
@@ -58,7 +58,7 @@ impl ServerHandler for PeerServer {
             hash: hash,
             our_peer_id: our_peer_id.to_string(),
             partial_file: partial_file,
-            num_pieces: num_pieces
+            num_pieces: num_pieces,
         }
     }
 
@@ -190,7 +190,9 @@ impl PeerServer {
 
             // messages that mutate the peer
             match msg {
-                PeerMsg::HandShake(..) => {}
+                PeerMsg::HandShake(..) => {
+                    peer.has_handshake = true;
+                }
                 PeerMsg::KeepAlive => {}
                 PeerMsg::Choke => {
                     peer.peer_choking = true;
@@ -223,8 +225,8 @@ impl PeerServer {
                 PeerMsg::Request(index, begin, offset) => {
                     let response = self._get_piece_from_req(index as usize, begin, offset);
                     match response {
-                        Some(r) =>  outgoing_msgs.push(r),
-                        _ => ()
+                        Some(r) => outgoing_msgs.push(r),
+                        _ => (),
                     }
                 }
                 PeerMsg::Piece(index, begin, block) => {

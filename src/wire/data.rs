@@ -5,6 +5,7 @@ use byteorder::{WriteBytesExt, ByteOrder, BigEndian};
 use metainfo::SHA1Hash20b;
 use file::PartialFile;
 use bit_vec::BitVec;
+use std::str;
 
 #[derive(Debug)]
 pub enum PeerMsg {
@@ -111,10 +112,13 @@ impl Into<Vec<u8>> for PeerMsg {
     }
 }
 
+#[derive(Debug)]
 pub enum MsgParseError {
     TooShort,
     TooShortForId,
     InvalidId,
+    Malformed(&'static str),
+    UnknownProtocol,
 }
 
 pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
@@ -123,21 +127,40 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
     const ID_LEN: usize = 1;
     const PORT_LEN: usize = 2;
 
+    info!("Bytes: len {:?}",
+          if bytes.len() > 80 {
+              &bytes[0..80]
+          } else {
+              bytes
+          });
+
     if bytes.len() < 4 {
         return Err(MsgParseError::TooShort);
     }
 
-    let len = BigEndian::read_u32(&bytes[0..4]) as usize - 4;
+    let mut len = BigEndian::read_u32(&bytes[0..4]) as usize;
+    info!("LENNY {}", len);
 
     if len == 0 {
         return Ok((PeerMsg::KeepAlive, 4));
-    }
-
-    if bytes.len() < (len - 1) || bytes.len() < 5 {
+    } else if len == 323119476 {
+        return parse_handshake(bytes);
+    } else if len + 4 > bytes.len() {
+        info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
+    } else if len == 323119476 {
+        return parse_handshake(bytes);
     }
 
     let bytes = &bytes[4..len];
+    len = len - 4;
+    if bytes.len() < len {
+        info!("Len is {} but need {}", bytes.len(), len);
+        return Err(MsgParseError::TooShort);
+    }
+
+    info!("Message has id {}", bytes[0]);
+
     let result = match bytes[0] {
         0 => Ok(PeerMsg::Choke),
         1 => Ok(PeerMsg::Unchoke),
@@ -151,7 +174,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
             Ok(PeerMsg::Have(piece_index))
         }
         5 => {
-            let bitfield_bytes = &bytes[0..len];
+            let bitfield_bytes = &bytes[0..len - 4];
             Ok(PeerMsg::Bitfield(BitVec::from_bytes(bitfield_bytes)))
         }
         6 => {
@@ -204,7 +227,26 @@ fn _parse_three_u32(bytes: &[u8]) -> (u32, u32, u32) {
 }
 
 pub fn parse_handshake(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
-    unimplemented!()
+    const BITTORRENT_PROTOCOL: &'static str = "BitTorrent protocol";
+
+    if bytes.len() < 1 + 19 + 8 + 20 + 20 {
+        // length byte, BitTorrent protocol, reserved , hash, peer id (unknown)
+        return Err(MsgParseError::TooShort);
+    }
+
+    if !(bytes[0] == 19 || bytes[0] == 323119476) {
+        info!("Bad bytes {}", bytes[0]);
+        return Err(MsgParseError::Malformed("Expected handshake to have protocol ID of 19 bytes"));
+    }
+    match str::from_utf8(&bytes[1..(1 + 19)]) {
+        Ok(BITTORRENT_PROTOCOL) => (),
+        _ => return Err(MsgParseError::UnknownProtocol),
+    }
+
+    Ok((PeerMsg::HandShake(BITTORRENT_PROTOCOL.to_string(),
+                           Vec::from(&bytes[(1 + 19 + 8)..(1 + 19 + 8 + 20)]),
+                           Vec::from(&bytes[(1 + 19 + 8 + 20)..(1 + 19 + 8 + 20 + 20)])),
+        (1 + 19 + 8 + 20 + 20)))
 }
 
 impl TryFrom<Vec<u8>> for PeerMsg {

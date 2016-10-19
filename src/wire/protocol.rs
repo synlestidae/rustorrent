@@ -10,6 +10,7 @@ use std::io;
 use std::error::Error;
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
+use wire::data::parse_handshake;
 
 
 use wire::handler::{ServerHandler, BasicHandler, PeerHandler, PeerAction, PeerStreamAction};
@@ -78,6 +79,7 @@ impl PeerStream {
     }
 
     fn message(&mut self) -> Option<PeerMsg> {
+        info!("Bytes in: {}", self.bytes_in.len());
         if self.bytes_in.len() == 0 {
             return None;
         }
@@ -89,9 +91,11 @@ impl PeerStream {
                 } else {
                     self.bytes_in = Vec::new();
                 }
+                info!("Message: {:?}", msg);
                 Some(msg)
             }
-            Err(_) => {
+            Err(err) => {
+                println!("Message not ready {:?}", err);
                 // TODO It needs to distinguish between recoverable and non-recoverable
                 None
             }
@@ -108,7 +112,7 @@ impl PeerStream {
                 self.bytes_out = self.bytes_out.split_off(offset);
             }
             Err(ref err) => {
-                info!("Writing failed: {}", err); 
+                info!("Writing failed: {}", err);
             }
         };
         result
@@ -258,6 +262,8 @@ impl Protocol {
                     peer: &mut PeerStream,
                     handler: &mut PeerServer)
                     -> (Option<PeerAction>, usize) {
+
+
         const READ_BUF_SIZE: usize = 1024;
         let mut buf = Vec::with_capacity(READ_BUF_SIZE);
         buf.resize(READ_BUF_SIZE, 0);
@@ -267,15 +273,38 @@ impl Protocol {
                 info!("Read {} bytes from {}", bytes_read, peer.id);//, socket.peer_addr());
                 bytes_read
             }
-            _ => 0,
+            Err(err) => 0,
         };
+
+        if !peer.handshake_received {
+            info!("Handshake not yet received: {:?}",
+                  if peer.bytes_in.len() > 80 {
+                      &peer.bytes_in[0..80]
+                  } else {
+                      &peer.bytes_in
+                  });
+            match parse_handshake(&peer.bytes_in) {
+                Ok((handshake, offset)) => {
+                    peer.handshake_received = true;
+                    peer.bytes_in.split_off(offset);
+                    info!("Handshake received: {:?}", handshake);
+                }
+                Err(e) => {
+                    info!("Error parsing handshake: {:?}", e);
+                    return (None, bytes_read);
+                }
+            }
+        }
 
         let action = match peer.message() {
             Some(msg) => {
                 info!("Received from peer {:?}", msg);
                 Some(handler.on_message_receive(peer.id, msg))
             }
-            _ => return (None, bytes_read),
+            None => {
+                info!("Error parsing. {} bytes left", peer.bytes_in.len());
+                return (None, bytes_read);
+            }
         };
 
         info!("Read {} bytes", bytes_read);
@@ -287,11 +316,11 @@ impl Protocol {
                      peer: &mut PeerStream,
                      handler: &mut PeerServer)
                      -> io::Result<usize> {
-        peer.take(socket) 
+        peer.take(socket)
     }
 
     fn _handle_hup(socket: &mut TcpStream, peer: &mut PeerStream, handler: &mut PeerServer) {
-        handler.on_peer_disconnect(peer.id); 
+        handler.on_peer_disconnect(peer.id);
     }
 
     fn _handle_outside_msg(&mut self, msg: ChanMsg) {
@@ -338,14 +367,11 @@ impl Protocol {
         match TcpStream::connect(&sock_addr) {
             Ok(sock) => {
                 self.poll
-                    .register(&sock,
-                              token,
-                              Ready::all(),
-                              PollOpt::edge());
+                    .register(&sock, token, Ready::all(), PollOpt::edge());
 
                 self.next_peer_id += 1;
                 return Some((sock, token));
-            },
+            }
             Err(e) => {
                 info!("Could not connect: {}", e);
                 return None;

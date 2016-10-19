@@ -31,6 +31,6 @@ impl log::Log for SimpleLogger {
 pub fn init() -> Result<(), SetLoggerError> {
     log::set_logger(|max_log_level| {
         max_log_level.set(LogLevelFilter::Info);
-            Box::new(SimpleLogger)
-        })
+        Box::new(SimpleLogger)
+    })
 }
