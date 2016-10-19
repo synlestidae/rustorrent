@@ -217,15 +217,17 @@ impl Protocol {
 
         if let Some((mut tcp_stream, mut peer_stream)) = self.streams.remove(&peer_id) {
             info!("Got event {:?} from peer id {}", event, peer_id);
-            let read_result =
-                Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
+            if (kind.is_readable()) {
+                let read_result =
+                    Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
 
-            match read_result.0 {
-                Some(action) => self._perform_action(action),
-                None => (),
+                match read_result.0 {
+                    Some(action) => self._perform_action(action),
+                    None => (),
+                }
+
+                self.stats.uploaded += read_result.1;
             }
-
-            self.stats.uploaded += read_result.1;
 
             let mut fatal_error_happened = false;
             if kind.is_writable() {
@@ -256,7 +258,7 @@ impl Protocol {
                     peer: &mut PeerStream,
                     handler: &mut PeerServer)
                     -> (Option<PeerAction>, usize) {
-        let mut buf = Vec::new();
+        let mut buf = Vec::with_capacity(1024);
         let bytes_read = match socket.read(&mut buf) {
             Ok(bytes_read) => {
                 peer.write_in(buf);
@@ -317,28 +319,29 @@ impl Protocol {
         }
 
         match self._connect_to_peer(addr, port) {
-            Some(sock) => {
-                let id = self.next_peer_id as u32;
+            Some((sock, Token(id))) => {
                 self.streams.insert(id, (sock, PeerStream::new(id)));
                 let action = self.handler.on_peer_connect(id);
                 self._perform_action(action);
-                self.next_peer_id += 1;
             }
             None => (),
         }
     }
 
-    fn _connect_to_peer(&mut self, addr: IpAddr, port: u16) -> Option<TcpStream> {
+    fn _connect_to_peer(&mut self, addr: IpAddr, port: u16) -> Option<(TcpStream, Token)> {
         let sock_addr = SocketAddr::new(addr, port);
+        let token = Token(self.next_peer_id);
         info!("Trying to connect to {} on port {}", addr, port);
         match TcpStream::connect(&sock_addr) {
             Ok(sock) => {
                 self.poll
                     .register(&sock,
-                              Token(self.next_peer_id),
+                              token,
                               Ready::all(),
                               PollOpt::edge());
-                return Some(sock);
+
+                self.next_peer_id += 1;
+                return Some((sock, token));
             },
             Err(e) => {
                 info!("Could not connect: {}", e);
