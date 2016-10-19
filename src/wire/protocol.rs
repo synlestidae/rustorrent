@@ -73,6 +73,7 @@ impl PeerStream {
     }
 
     fn write_out(&mut self, mut bytes: Vec<u8>) {
+        println!("This goes out {:?}", bytes);
         self.bytes_out.append(&mut bytes);
     }
 
@@ -100,7 +101,17 @@ impl PeerStream {
     fn take(&mut self, out: &mut Write) -> io::Result<usize> {
         const MAX_BYTES_WRITE: usize = 1024 * 128;
         info!("Attempting to write {} bytes", self.bytes_out.len());
-        out.write(&self.bytes_out) 
+        let result = out.write(&self.bytes_out);
+        match result {
+            Ok(offset) => {
+                info!("Wrote {} bytes", offset);
+                self.bytes_out = self.bytes_out.split_off(offset);
+            }
+            Err(ref err) => {
+                info!("Writing failed: {}", err); 
+            }
+        };
+        result
     }
 }
 
