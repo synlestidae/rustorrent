@@ -258,7 +258,9 @@ impl Protocol {
                     peer: &mut PeerStream,
                     handler: &mut PeerServer)
                     -> (Option<PeerAction>, usize) {
-        let mut buf = Vec::with_capacity(1024);
+        const READ_BUF_SIZE: usize = 1024;
+        let mut buf = Vec::with_capacity(READ_BUF_SIZE);
+        buf.resize(READ_BUF_SIZE, 0);
         let bytes_read = match socket.read(&mut buf) {
             Ok(bytes_read) => {
                 peer.write_in(buf);
@@ -319,7 +321,8 @@ impl Protocol {
         }
 
         match self._connect_to_peer(addr, port) {
-            Some((sock, Token(id))) => {
+            Some((sock, Token(id_usize))) => {
+                let id = id_usize as u32;
                 self.streams.insert(id, (sock, PeerStream::new(id)));
                 let action = self.handler.on_peer_connect(id);
                 self._perform_action(action);
