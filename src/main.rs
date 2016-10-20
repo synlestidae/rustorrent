@@ -41,7 +41,7 @@ pub fn main() {
     init();
     let mut args = env::args();
     if let Some(path_string) = args.nth(1) {
-        println!("Starting...");
+        info!("Starting up");
         let result = _begin_with_path(path_string);
     } else {
         _usage();
@@ -189,7 +189,7 @@ fn _get_request_obj(hash: &SHA1Hash20b,
 
     match info.info.original {
         Some(ref original_dict) => info_hash = original_dict.hash(),
-        None => println!("No hash!"),
+        None => info!("No hash!"),
     };
 
     TrackerReq {
@@ -211,7 +211,7 @@ fn _get_request_obj(hash: &SHA1Hash20b,
 
 fn _usage() {
     match env::current_exe() {
-        Ok(path) => println!("Usage: {} torrent_file", path.display()),
-        _ => println!("Invalid arguments. Format is: torrent_file"),
+        Ok(path) => info!("Usage: {} torrent_file", path.display()),
+        _ => info!("Invalid arguments. Format is: torrent_file"),
     }
 }

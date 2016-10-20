@@ -91,6 +91,7 @@ impl ServerHandler for PeerServer {
         info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
         let request_actions = self._request_pieces();
+        info!("Sending {} requests", request_actions.len());
         request_actions
     }
 }
@@ -107,7 +108,7 @@ impl PeerServer {
         let mut actions = Vec::new();
         for (&id, peer) in &self.peers {
             // Skip choking peers
-            if peer.peer_choking || peer.am_choking {
+            if peer.peer_choking || peer.am_choking || !peer.has_handshake {
                 continue;
             }
 

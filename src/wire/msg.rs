@@ -145,7 +145,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
         return Ok((PeerMsg::KeepAlive, 4));
     } else if len == 323119476 {
         return parse_handshake(bytes);
-    } else if len + 4 > bytes.len() {
+    } else if len > bytes.len() {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
     } else if len == 323119476 {

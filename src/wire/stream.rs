@@ -78,7 +78,7 @@ impl PeerStream {
     }
 
     fn write_out(&mut self, mut bytes: Vec<u8>) {
-        println!("This goes out {:?}", bytes);
+        info!("This goes out {:?}", bytes);
         self.bytes_out.append(&mut bytes);
     }
 
@@ -99,7 +99,7 @@ impl PeerStream {
                 Some(msg)
             }
             Err(err) => {
-                println!("Message not ready {:?}", err);
+                info!("Message not ready {:?}", err);
                 // TODO It needs to distinguish between recoverable and non-recoverable
                 None
             }
@@ -174,7 +174,16 @@ impl Protocol {
             for event in events.iter() {
                 self._handle_event(event);
             }
-            self.handler.on_loop();
+            info!("All events handled");
+            let actions = self.handler.on_loop();
+            for action in actions {
+                match self.streams.get_mut(&action.0) {
+                    Some(&mut (_, ref mut peer)) => {
+                        Protocol::_perform_action(action, peer);
+                    }
+                    None => ()
+                }
+            }
         }
     }
 
