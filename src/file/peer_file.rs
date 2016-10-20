@@ -2,7 +2,7 @@ use bit_vec::BitVec;
 use file::PartialFileTrait;
 
 pub struct PeerFile {
-    pieces: BitVec,
+    pub pieces: BitVec,
 }
 
 impl PeerFile {

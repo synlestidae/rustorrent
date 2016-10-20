@@ -65,6 +65,10 @@ impl PartialFile {
     pub fn add_piece(&mut self, index: usize, offset: usize, block: Vec<u8>) -> bool {
         self.collection.add(index as usize, offset as usize, block)
     }
+
+    pub fn piece_length(&self) -> u64 {
+        self.info.piece_length
+    }
 }
 
 pub struct Piece {

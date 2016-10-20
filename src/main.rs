@@ -41,6 +41,7 @@ pub fn main() {
     init();
     let mut args = env::args();
     if let Some(path_string) = args.nth(1) {
+        println!("Starting...");
         let result = _begin_with_path(path_string);
     } else {
         _usage();

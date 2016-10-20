@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use wire::msg::PeerMsg;
 use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
+use bit_vec::BitVec;
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
 const KEEPALIVE_PERIOD: u64 = 30;
@@ -45,6 +46,7 @@ pub struct PeerServer {
     our_peer_id: String,
     partial_file: PartialFile,
     num_pieces: usize,
+    pieces_to_request: BitVec
 }
 
 const PROTOCOL_ID: &'static str = "BitTorrent protocol";
@@ -60,6 +62,7 @@ impl ServerHandler for PeerServer {
             our_peer_id: our_peer_id.to_string(),
             partial_file: partial_file,
             num_pieces: num_pieces,
+            pieces_to_request: BitVec::from_elem(num_pieces, true)
         }
     }
 
@@ -87,7 +90,8 @@ impl ServerHandler for PeerServer {
     fn on_loop(&mut self) -> Vec<PeerAction> {
         info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
-        Vec::new()
+        let request_actions = self._request_pieces();
+        request_actions
     }
 }
 
@@ -98,6 +102,57 @@ impl PeerServer {
             self.peers.remove(&id);
         }
     }
+
+    fn _request_pieces(&mut self) -> Vec<PeerAction> {
+        let mut actions = Vec::new();
+        for (&id, peer) in &self.peers {
+            // Skip choking peers
+            if peer.peer_choking || peer.am_choking {
+                continue;
+            }
+
+            let mut missing = self.partial_file.bit_array();
+            missing.negate();
+            let mut them = peer.file.bit_array();
+            missing.intersect(&them);
+            missing.intersect(&self.pieces_to_request);
+
+            //now have eligible pieces to request
+            let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
+            let piece_len = self.partial_file.piece_length();
+            let mut bytes_requested = 0;
+            let mut pieces_request = 0;
+
+            const MAX_BLOCK_SIZE: u64 = 2 << 14;
+            const MAX_BYTES_PER_REQUEST: u64 = 1024 * 512;
+            const MAX_PIECES_PEER: usize = 10;
+
+            let mut msgs = Vec::new();
+            for (piece_count, piece_index) in pieces.into_iter().enumerate() {
+                if bytes_requested > MAX_BYTES_PER_REQUEST || piece_count > MAX_PIECES_PEER {
+                    break;
+                }
+                if piece_len > MAX_BLOCK_SIZE {
+                    let mut offset = 0;
+                    while offset < piece_len {
+                        if (offset + MAX_BLOCK_SIZE > piece_len) {
+                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
+                        } else {
+                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
+                        }
+                        offset += MAX_BLOCK_SIZE;
+                    }
+                } else {
+                    msgs.push(PeerMsg::Request(piece_index as u32, 0, piece_len as u32));
+                }
+            }
+
+            let req_actions = PeerAction(id, PeerStreamAction::SendMessages(msgs));
+            actions.push(req_actions);
+        }
+        actions
+    }
+
 
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
         let mut for_removal = Vec::new();
