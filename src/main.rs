@@ -35,7 +35,7 @@ use mio::channel::{Sender, Receiver};
 use sha1::Sha1;
 
 const DEFAULT_PORT: u32 = 12001;
-const DEFAULT_PEER_ID: &'static str = "-RT-0001-48230984303";
+const DEFAULT_PEER_ID: &'static str = "-RT-0001-48230984201";
 
 pub fn main() {
     init();

@@ -102,7 +102,7 @@ impl Into<Vec<u8>> for PeerMsg {
             _ => out,
         };
         let mut front_part = Vec::new();
-        let length = bytes.len() as u32;
+        let length = (bytes.len() + 1) as u32;
         front_part.write_u32::<BigEndian>(length);
         if let Some(id) = self.id() {
             front_part.push(id);

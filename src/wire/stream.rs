@@ -35,6 +35,15 @@ pub struct Protocol {
     next_peer_id: usize,
 }
 
+struct PeerStream {
+    id: StreamId,
+    bytes_in: Vec<u8>,
+    bytes_out: Vec<u8>,
+    handshake_sent: bool,
+    handshake_received: bool,
+    disconnected: bool,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Stats {
     pub uploaded: usize,
@@ -52,22 +61,15 @@ impl Stats {
     }
 }
 
-struct PeerStream {
-    id: StreamId,
-    bytes_in: Vec<u8>,
-    bytes_out: Vec<u8>,
-    handshake_sent: bool,
-    handshake_received: bool,
-}
-
 impl PeerStream {
     fn new(id: StreamId) -> PeerStream {
         PeerStream {
             id: id,
             bytes_in: Vec::new(),
             bytes_out: Vec::new(),
-            handshake_sent: false,
+            handshake_sent: true,
             handshake_received: false,
+            disconnected: false,
         }
     }
 
@@ -196,26 +198,19 @@ impl Protocol {
         })
     }
 
-    fn _perform_action(&mut self, action: PeerAction) {
+    fn _perform_action(action: PeerAction, peer: &mut PeerStream) {
         let id = action.0;
         match action.1 {
             PeerStreamAction::Nothing => (),
             PeerStreamAction::SendMessages(msgs) => {
                 for msg in msgs {
                     info!("Writing message {:?}", msg);
-                    let bytes: Vec<u8> = msg.into();
-                    match self.streams.get_mut(&id) {
-                        Some(&mut (_, ref mut peer)) => {
-                            peer.write_out(bytes);
-                        }
-                        None => {
-                            // this peer already disconnected
-                        }
-                    }
+                    let bytes = msg.into();
+                    peer.write_out(bytes);
                 }
             }
             PeerStreamAction::Disconnect => {
-                self.streams.remove(&id);
+                peer.disconnected = true;
             }
         }
     }
@@ -233,9 +228,8 @@ impl Protocol {
                 let read_result =
                     Protocol::_handle_read(&mut tcp_stream, &mut peer_stream, &mut self.handler);
 
-                match read_result.0 {
-                    Some(action) => self._perform_action(action),
-                    None => (),
+                for action in read_result.0 {
+                    Protocol::_perform_action(action, &mut peer_stream);
                 }
 
                 self.stats.uploaded += read_result.1;
@@ -269,7 +263,7 @@ impl Protocol {
     fn _handle_read(socket: &mut TcpStream,
                     peer: &mut PeerStream,
                     handler: &mut PeerServer)
-                    -> (Option<PeerAction>, usize) {
+                    -> (Vec<PeerAction>, usize) {
 
 
         const READ_BUF_SIZE: usize = 1024;
@@ -284,40 +278,43 @@ impl Protocol {
             Err(err) => 0,
         };
 
-        if !peer.handshake_received {
-            info!("Handshake not yet received: {:?}",
-                  if peer.bytes_in.len() > 80 {
-                      &peer.bytes_in[0..80]
-                  } else {
-                      &peer.bytes_in
-                  });
-            match parse_handshake(&peer.bytes_in) {
-                Ok((handshake, offset)) => {
-                    peer.handshake_received = true;
-                    peer.bytes_in.split_off(offset);
-                    info!("Handshake received: {:?}", handshake);
+
+        // Attempt to parse a handshake first
+
+
+        let mut actions = Vec::new();
+        loop {
+            let msg = if !peer.handshake_received {
+                match parse_handshake(&peer.bytes_in) {
+                    Ok((handshake, offset)) => {
+                        peer.bytes_in.split_off(offset);
+                        peer.handshake_received = true;
+                        info!("Handshake received: {:?}", handshake);
+                        Some(handshake)
+                    }
+                    Err(e) => {
+                        info!("Error parsing handshake: {:?}", e);
+                        None
+                    }
                 }
-                Err(e) => {
-                    info!("Error parsing handshake: {:?}", e);
-                    return (None, bytes_read);
+            } else {
+                peer.message()
+            };
+
+            let actions = match msg {
+                Some(msg) => {
+                    info!("Received from peer {:?}", msg);
+                    actions.push(handler.on_message_receive(peer.id, msg));
                 }
-            }
+                None => {
+                    info!("Error parsing. {} bytes left", peer.bytes_in.len());
+                    return (Vec::new(), bytes_read);
+                }
+            };
         }
 
-        let action = match peer.message() {
-            Some(msg) => {
-                info!("Received from peer {:?}", msg);
-                Some(handler.on_message_receive(peer.id, msg))
-            }
-            None => {
-                info!("Error parsing. {} bytes left", peer.bytes_in.len());
-                return (None, bytes_read);
-            }
-        };
-
         info!("Read {} bytes", bytes_read);
-
-        (action, bytes_read)
+        (actions, bytes_read)
     }
 
     fn _handle_write(socket: &mut TcpStream,
@@ -360,9 +357,12 @@ impl Protocol {
         match self._connect_to_peer(addr, port) {
             Some((sock, Token(id_usize))) => {
                 let id = id_usize as u32;
-                self.streams.insert(id, (sock, PeerStream::new(id)));
+                let mut stream = PeerStream::new(id);
                 let action = self.handler.on_peer_connect(id);
-                self._perform_action(action);
+
+                Protocol::_perform_action(action, &mut stream);
+
+                self.streams.insert(id, (sock, stream));
             }
             None => (),
         }
