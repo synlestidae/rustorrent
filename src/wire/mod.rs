@@ -1,6 +1,7 @@
-mod data;
-mod protocol;
+mod peer;
+mod stream;
 mod handler;
-mod protocol_handler;
+mod action;
+mod msg;
 
-pub use wire::protocol::{Protocol, ChanMsg, Stats};
+pub use wire::stream::{Protocol, ChanMsg, Stats};

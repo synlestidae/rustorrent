@@ -1,21 +1,23 @@
-use mio::*;
-use mio::tcp::TcpStream;
-use mio::channel::channel;
-use mio::channel::{Sender, Receiver};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::io::{Read, Write};
 use std::io;
 use std::error::Error;
+
+use mio::*;
+use mio::tcp::TcpStream;
+use mio::channel::channel;
+use mio::channel::{Sender, Receiver};
+
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
-use wire::data::parse_handshake;
 
-
-use wire::handler::{ServerHandler, BasicHandler, PeerHandler, PeerAction, PeerStreamAction};
-use wire::data::{PeerMsg, parse_peermsg};
-use wire::protocol_handler::PeerServer;
+use wire::handler::{ServerHandler};
+use wire::action::{PeerAction, PeerStreamAction};
+use wire::msg::{PeerMsg, parse_peermsg, parse_handshake};
+use wire::action::PeerId;
+use wire::peer::PeerServer;
 
 const OUTSIDE_MSG: Token = Token(0);
 type StreamId = u32;
@@ -33,14 +35,6 @@ pub struct Protocol {
     next_peer_id: usize,
 }
 
-struct PeerStream {
-    id: StreamId,
-    bytes_in: Vec<u8>,
-    bytes_out: Vec<u8>,
-    handshake_sent: bool,
-    handshake_received: bool,
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct Stats {
     pub uploaded: usize,
@@ -56,6 +50,14 @@ impl Stats {
             peer_count: 0,
         }
     }
+}
+
+struct PeerStream {
+    id: StreamId,
+    bytes_in: Vec<u8>,
+    bytes_out: Vec<u8>,
+    handshake_sent: bool,
+    handshake_received: bool,
 }
 
 impl PeerStream {
@@ -124,6 +126,8 @@ pub enum ChanMsg {
     NewPeer(IpAddr, u16),
     StatsRequest,
     StatsResponse(Stats),
+    ThrottleOn(usize),
+    ThrottleOff
 }
 
 impl Protocol {
@@ -166,19 +170,23 @@ impl Protocol {
         loop {
             self.poll.poll(&mut events, None).unwrap();
             for event in events.iter() {
-                match event.token() {
-                    OUTSIDE_MSG => {
-                        loop {
-                            match self.receiver.try_recv() {
-                                Ok(msg) => self._handle_outside_msg(msg),
-                                _ => break,
-                            }
-                        }
-                    }
-                    _ => self._handle_socket_event(event),
-                }
+                self._handle_event(event);
             }
             self.handler.on_loop();
+        }
+    }
+
+    fn _handle_event(&mut self, event: Event) {
+        match event.token() {
+            OUTSIDE_MSG => {
+                loop {
+                    match self.receiver.try_recv() {
+                        Ok(msg) => self._handle_outside_msg(msg),
+                        _ => break,
+                    }
+                }
+            }
+            _ => self._handle_socket_event(event),
         }
     }
 

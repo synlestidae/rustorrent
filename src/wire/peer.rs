@@ -1,16 +1,17 @@
-use wire::handler::{PeerId, PeerStreamAction, PeerAction, ServerHandler};
+use wire::handler::ServerHandler;
+use wire::action::{PeerId, PeerStreamAction, PeerAction};
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 use file::PartialFile;
 use std::collections::HashMap;
-use wire::data::PeerMsg;
+use wire::msg::PeerMsg;
 use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
 const KEEPALIVE_PERIOD: u64 = 30;
 
-pub struct PeerState {
+struct PeerState {
     has_handshake: bool,
     disconnected: bool,
     peer_choking: bool,
@@ -82,7 +83,7 @@ impl ServerHandler for PeerServer {
         PeerAction(id, PeerStreamAction::Nothing)
     }
 
-    // remove peers that have no replied in five minutes
+    // remove peers that have not replied in five minutes
     fn on_loop(&mut self) -> Vec<PeerAction> {
         info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
