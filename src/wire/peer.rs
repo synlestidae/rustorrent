@@ -8,37 +8,10 @@ use wire::msg::PeerMsg;
 use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 use bit_vec::BitVec;
+use wire::peer_info::PeerState;
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
 const KEEPALIVE_PERIOD: u64 = 30;
-
-struct PeerState {
-    has_handshake: bool,
-    disconnected: bool,
-    peer_choking: bool,
-    peer_interested: bool,
-    am_choking: bool,
-    am_interested: bool,
-    last_msg_time: SystemTime,
-    last_msg_sent_time: SystemTime,
-    file: PeerFile,
-}
-
-impl PeerState {
-    pub fn new(len: usize) -> PeerState {
-        PeerState {
-            has_handshake: false,
-            disconnected: false,
-            peer_choking: true,
-            peer_interested: false,
-            am_choking: true,
-            am_interested: false,
-            last_msg_time: SystemTime::now(),
-            last_msg_sent_time: SystemTime::now(),
-            file: PeerFile::new(len),
-        }
-    }
-}
 
 pub struct PeerServer {
     peers: HashMap<PeerId, PeerState>,
@@ -67,7 +40,7 @@ impl ServerHandler for PeerServer {
     }
 
     fn on_peer_connect(&mut self, id: PeerId) -> PeerAction {
-        self.peers.insert(id, PeerState::new(self.num_pieces));
+        self.peers.insert(id, PeerState::new(self.num_pieces, id));
 
         let handshake = PeerMsg::handshake(PROTOCOL_ID.to_string(),
                                            self.our_peer_id.to_string(),
