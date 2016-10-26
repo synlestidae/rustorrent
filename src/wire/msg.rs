@@ -175,7 +175,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
             Ok(PeerMsg::Have(piece_index))
         }
         5 => {
-            let bitfield_bytes = &bytes[0..len - 4];
+            let bitfield_bytes = &bytes[0..len - 1];
             Ok(PeerMsg::Bitfield(BitVec::from_bytes(bitfield_bytes)))
         }
         6 => {

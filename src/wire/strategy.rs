@@ -77,8 +77,8 @@ impl NormalStrategy {
             let req_actions = PeerAction(id, PeerStreamAction::SendMessages(msgs));
             actions.push(req_actions);
         }
-        //actions
-        Vec::new()
+        actions
+        //Vec::new()
     }
 }
 

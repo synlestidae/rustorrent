@@ -217,7 +217,11 @@ impl PeerServer {
                 }
                 PeerMsg::Have(index) => peer.file.set(index as usize, true),
                 PeerMsg::Bitfield(ref bit_field) => {
+                    let limit = peer.file.bit_array().len();
                     for (i, bit) in bit_field.iter().enumerate()  {
+                        if i >= limit {
+                            break;
+                        }
                         peer.file.set(i, bit);
                     }
                 }

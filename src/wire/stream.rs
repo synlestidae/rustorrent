@@ -90,8 +90,9 @@ impl PeerStream {
 
         match parse_peermsg(&self.bytes_in) {
             Ok((msg, offset)) => {
+                info!("Parsed a message of len {}", offset);
                 if offset < self.bytes_in.len() {
-                    self.bytes_in.split_off(offset);
+                    self.bytes_in = self.bytes_in.split_off(offset);
                 } else {
                     self.bytes_in = Vec::new();
                 }
@@ -296,7 +297,7 @@ impl Protocol {
             let msg = if !peer.handshake_received {
                 match parse_handshake(&peer.bytes_in) {
                     Ok((handshake, offset)) => {
-                        peer.bytes_in.split_off(offset);
+                        peer.bytes_in = peer.bytes_in.split_off(offset);
                         peer.handshake_received = true;
                         info!("Handshake received: {:?}", handshake);
                         Some(handshake)
