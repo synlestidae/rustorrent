@@ -8,17 +8,25 @@ use file::PartialFile;
 use file::PartialFileTrait;
 use wire::action::PeerId;
 
-trait Strategy {
-    fn query(&mut self, results: Vec<Result>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order>;
+pub trait Strategy {
+    fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order>;
 }
 
-struct NormalStrategy {
+pub struct NormalStrategy {
     orders: HashMap<OrderId, OrderInfo>,
     pieces_to_request: BitVec,
     next_order_id: usize
 }
 
 impl NormalStrategy {
+    pub fn new() -> NormalStrategy {
+        NormalStrategy {
+            orders: HashMap::new(),
+            pieces_to_request: BitVec::new(),
+            next_order_id: 0
+        }
+    }
+
     fn _request_pieces(&mut self, peers: Vec<&PeerState>, partial_file: &PartialFile) -> Vec<PeerAction> {
         let mut actions = Vec::new();
         for peer in peers {
@@ -72,12 +80,13 @@ impl NormalStrategy {
 }
 
 impl Strategy for NormalStrategy {
-    fn query(&mut self, results: Vec<Result>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order> {
+    fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) 
+        -> Vec<Order> {
         let actions = self._request_pieces(peers, file);
         let mut orders = Vec::new();
 
         for action in actions {
-            orders.push(Order {order_id: self.next_order_id, action: action});
+            orders.push(Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted});
             self.next_order_id += 1;
         }
 
@@ -87,16 +96,33 @@ impl Strategy for NormalStrategy {
 
 struct OrderInfo;
 type OrderId = usize;
-pub struct Result {
+
+pub struct OrderResult {
     status: OrderStatus,
     order_id: OrderId
 }
 
 pub struct Order {
+    status: OrderStatus,
     order_id: OrderId,
-    action: PeerAction
+    pub action: PeerAction
 }
- 
+
+impl Order {
+    pub fn complete(&self, status: OrderStatus) -> OrderResult {
+        OrderResult { order_id: self.order_id, status: status}
+    }
+
+    pub fn id(&self) -> OrderId {
+        self.order_id
+    }
+
+    pub fn set_status(&mut self, status: OrderStatus) {
+        self.status = status;
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub enum OrderStatus {
     NotStarted,
     InProgress, 

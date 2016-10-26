@@ -9,17 +9,30 @@ use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 use bit_vec::BitVec;
 use wire::peer_info::PeerState;
+use wire::strategy::{Strategy, NormalStrategy, Order, OrderResult};
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
 const KEEPALIVE_PERIOD: u64 = 30;
 
 pub struct PeerServer {
-    peers: HashMap<PeerId, PeerState>,
+    peers: HashMap<PeerId, Peer>,
     hash: SHA1Hash20b,
     our_peer_id: String,
     partial_file: PartialFile,
     num_pieces: usize,
-    pieces_to_request: BitVec
+    pieces_to_request: BitVec,
+    strategy: NormalStrategy
+}
+
+struct Peer {
+    state: PeerState, 
+    orders: Vec<Order>
+}
+
+impl Peer {
+    pub fn new(state: PeerState) -> Peer {
+        Peer { state: state, orders: Vec::new() } 
+    }
 }
 
 const PROTOCOL_ID: &'static str = "BitTorrent protocol";
@@ -35,12 +48,14 @@ impl ServerHandler for PeerServer {
             our_peer_id: our_peer_id.to_string(),
             partial_file: partial_file,
             num_pieces: num_pieces,
-            pieces_to_request: BitVec::from_elem(num_pieces, true)
+            pieces_to_request: BitVec::from_elem(num_pieces, true),
+            strategy: NormalStrategy::new()
         }
     }
 
     fn on_peer_connect(&mut self, id: PeerId) -> PeerAction {
-        self.peers.insert(id, PeerState::new(self.num_pieces, id));
+        let peer = Peer::new(PeerState::new(self.num_pieces, id));
+        self.peers.insert(id, peer);
 
         let handshake = PeerMsg::handshake(PROTOCOL_ID.to_string(),
                                            self.our_peer_id.to_string(),
@@ -63,9 +78,13 @@ impl ServerHandler for PeerServer {
     fn on_loop(&mut self) -> Vec<PeerAction> {
         info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
-        let request_actions = self._request_pieces();
-        info!("Sending {} requests", request_actions.len());
-        request_actions
+        let orders = self.strategy.query(Vec::new(), 
+            Vec::new(), self.peers.iter().map(|(_, p)| &p.state).collect::<Vec<_>>(), &self.partial_file);
+
+        //for order in orders {
+        //}
+
+        orders.into_iter().map(|order| order.action).collect::<Vec<_>>()
     }
 }
 
@@ -77,61 +96,11 @@ impl PeerServer {
         }
     }
 
-    fn _request_pieces(&mut self) -> Vec<PeerAction> {
-        let mut actions = Vec::new();
-        for (&id, peer) in &self.peers {
-            // Skip choking peers
-            if peer.peer_choking || peer.am_choking || !peer.has_handshake {
-                continue;
-            }
-
-            let mut missing = self.partial_file.bit_array();
-            missing.negate();
-            let mut them = peer.file.bit_array();
-            missing.intersect(&them);
-            missing.intersect(&self.pieces_to_request);
-
-            //now have eligible pieces to request
-            let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
-            let piece_len = self.partial_file.piece_length();
-            let mut bytes_requested = 0;
-            let mut pieces_request = 0;
-
-            const MAX_BLOCK_SIZE: u64 = 2 << 14;
-            const MAX_BYTES_PER_REQUEST: u64 = 1024 * 512;
-            const MAX_PIECES_PEER: usize = 10;
-
-            let mut msgs = Vec::new();
-            for (piece_count, piece_index) in pieces.into_iter().enumerate() {
-                if bytes_requested > MAX_BYTES_PER_REQUEST || piece_count > MAX_PIECES_PEER {
-                    break;
-                }
-                if piece_len > MAX_BLOCK_SIZE {
-                    let mut offset = 0;
-                    while offset < piece_len {
-                        if (offset + MAX_BLOCK_SIZE > piece_len) {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
-                        } else {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
-                        }
-                        offset += MAX_BLOCK_SIZE;
-                    }
-                } else {
-                    msgs.push(PeerMsg::Request(piece_index as u32, 0, piece_len as u32));
-                }
-            }
-
-            let req_actions = PeerAction(id, PeerStreamAction::SendMessages(msgs));
-            actions.push(req_actions);
-        }
-        actions
-    }
-
-
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
         let mut for_removal = Vec::new();
-        for (&id, peer) in &self.peers {
-            match peer.last_msg_time.elapsed() {
+        for (&id, ref mut peer_) in &self.peers {
+            let peer = &mut peer_.state;
+            match peer.state.last_msg_time.elapsed() {
                 Ok(duration) => {
                     if duration.as_secs() > TIMEOUT_SECONDS {
                         for_removal.push(id);
@@ -145,7 +114,8 @@ impl PeerServer {
 
     fn _get_keepalive_ids(&self) -> Vec<PeerId> {
         let mut for_keeping = Vec::new();
-        for (&id, peer) in &self.peers {
+        for (&id, ref mut peer_) in &self.peers {
+            let peer = peer_.state;
             match peer.last_msg_time.elapsed() {
                 Ok(duration) => {
                     if duration.as_secs() > KEEPALIVE_PERIOD {
@@ -178,10 +148,10 @@ impl PeerServer {
         {
             info!("Received msg {:?} from id {}", msg, id);
 
-            let peer = match self.peers.get_mut(&id) {
+            let ref peer = match self.peers.get_mut(&id) {
                 Some(peer) => peer,
                 None => return PeerStreamAction::Nothing,
-            };
+            }.state;
 
             if peer.disconnected {
                 return PeerStreamAction::Nothing;
@@ -215,10 +185,10 @@ impl PeerServer {
         let mut handled = true;
 
         {
-            let peer = match self.peers.get_mut(&id) {
+            let ref peer = match self.peers.get_mut(&id) {
                 Some(peer) => peer,
                 None => return PeerStreamAction::Nothing,
-            };
+            }.state;
 
             // messages that mutate the peer
             match msg {
@@ -247,7 +217,7 @@ impl PeerServer {
         // messages that don't need to mutate peer
         let choking = {
             match self.peers.get(&id) {
-                Some(peer) => peer.am_choking,
+                Some(peer) => peer.state.am_choking,
                 None => return PeerStreamAction::Nothing,
             }
         };
