@@ -26,8 +26,8 @@ impl PartialFileTrait for PartialFile {
 
     fn bit_array(&self) -> BitVec {
         let mut bit_vec = BitVec::from_elem(self.info.pieces.len(), false);
-        for (i, piece) in self.info.pieces.iter().enumerate() {
-            bit_vec.set(i, true);
+        for (i, ref piece) in self.collection.pieces.iter().enumerate() {
+            bit_vec.set(i, piece.definitely_complete);
         }
         bit_vec
     }
@@ -93,6 +93,7 @@ impl Piece {
         }
         let existing_block = &mut self.data;
         existing_block.resize(offset + block.len(), 0);
+        println!("Adding {} bytes to file at offset {}", block.len(), offset);
         for i in 0..block.len() {
             existing_block[offset + i] = block[i];
         }

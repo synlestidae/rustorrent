@@ -76,7 +76,10 @@ impl Into<Vec<u8>> for PeerMsg {
                 out.write_u32::<BigEndian>(piece_index);
                 out
             }
-            PeerMsg::Bitfield(bit_field) => unimplemented!(),
+            PeerMsg::Bitfield(ref bit_field) => {
+                out.append(&mut bit_field.to_bytes());
+                out
+            }
             PeerMsg::Request(index, begin, length) => {
                 out.write_u32::<BigEndian>(index);
                 out.write_u32::<BigEndian>(begin);
@@ -148,12 +151,10 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
     } else if len > bytes.len() {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
-    } else if len == 323119476 {
-        return parse_handshake(bytes);
-    }
+    } 
 
-    let bytes = &bytes[4..len];
-    len = len - 4;
+    let bytes = &bytes[4..bytes.len()];
+    //len = len - 4;
     if bytes.len() < len {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
@@ -215,6 +216,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
         _ => Err(MsgParseError::InvalidId),
     };
 
+    info!("Msg {:?} had length {}", result, len + 4);
     result.map(|msg| (msg, len + 4))
 }
 

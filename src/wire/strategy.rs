@@ -15,28 +15,27 @@ pub trait Strategy {
 pub struct NormalStrategy {
     orders: HashMap<OrderId, OrderInfo>,
     pieces_to_request: BitVec,
-    next_order_id: usize
+    next_order_id: usize,
+    piece_length: u64
 }
 
 impl NormalStrategy {
-    pub fn new() -> NormalStrategy {
+    pub fn new(num_pieces: u64, piece_length: u64) -> NormalStrategy {
         NormalStrategy {
             orders: HashMap::new(),
-            pieces_to_request: BitVec::new(),
-            next_order_id: 0
+            pieces_to_request: BitVec::from_elem(num_pieces as usize, true),
+            next_order_id: 0,
+            piece_length: piece_length
         }
     }
 
-    fn _request_pieces(&mut self, peers: Vec<&PeerState>, partial_file: &PartialFile) -> Vec<PeerAction> {
+    pub fn request_pieces<F: PartialFileTrait>(&mut self, peers: Vec<&PeerState>, partial_file: &F) -> Vec<PeerAction> {
         let mut actions = Vec::new();
-        for peer in peers {
+        let ready_peers = peers.iter().filter(|peer| !peer.peer_choking && !peer.am_choking && peer.has_handshake);
+        for peer in ready_peers {
             let id = peer.peer_id;
-            // Skip choking peers
-            if peer.peer_choking || peer.am_choking || !peer.has_handshake {
-                continue;
-            }
-
             let mut missing = partial_file.bit_array();
+
             missing.negate();
             let mut them = peer.file.bit_array();
             missing.intersect(&them);
@@ -44,7 +43,7 @@ impl NormalStrategy {
 
             //now have eligible pieces to request
             let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
-            let piece_len = partial_file.piece_length();
+            let piece_len = self.piece_length;
             let mut bytes_requested = 0;
             let mut pieces_request = 0;
 
@@ -61,28 +60,32 @@ impl NormalStrategy {
                     let mut offset = 0;
                     while offset < piece_len {
                         if (offset + MAX_BLOCK_SIZE > piece_len) {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
+                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, 
+                                MAX_BLOCK_SIZE as u32));
                         } else {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, piece_len as u32));
+                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32,
+                                MAX_BLOCK_SIZE as u32));
                         }
                         offset += MAX_BLOCK_SIZE;
                     }
                 } else {
                     msgs.push(PeerMsg::Request(piece_index as u32, 0, piece_len as u32));
                 }
+                self.pieces_to_request.set(piece_index as usize, false);
             }
 
             let req_actions = PeerAction(id, PeerStreamAction::SendMessages(msgs));
             actions.push(req_actions);
         }
-        actions
+        //actions
+        Vec::new()
     }
 }
 
 impl Strategy for NormalStrategy {
     fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) 
         -> Vec<Order> {
-        let actions = self._request_pieces(peers, file);
+        let actions = self.request_pieces(peers, file);
         let mut orders = Vec::new();
 
         for action in actions {
@@ -115,6 +118,10 @@ impl Order {
 
     pub fn id(&self) -> OrderId {
         self.order_id
+    }
+
+    pub fn status(&self) -> OrderStatus {
+        self.status
     }
 
     pub fn set_status(&mut self, status: OrderStatus) {

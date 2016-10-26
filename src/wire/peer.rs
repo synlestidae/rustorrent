@@ -41,6 +41,7 @@ impl ServerHandler for PeerServer {
     fn new(metainfo: MetaInfo, hash: SHA1Hash20b, our_peer_id: &str) -> Self {
         let num_pieces = metainfo.info.pieces.len();
         let partial_file = PartialFile::new(&metainfo.info);
+        let pl = partial_file.piece_length();
 
         PeerServer {
             peers: HashMap::new(),
@@ -49,7 +50,7 @@ impl ServerHandler for PeerServer {
             partial_file: partial_file,
             num_pieces: num_pieces,
             pieces_to_request: BitVec::from_elem(num_pieces, true),
-            strategy: NormalStrategy::new()
+            strategy: NormalStrategy::new(num_pieces as u64, pl)
         }
     }
 
@@ -81,14 +82,20 @@ impl ServerHandler for PeerServer {
         let orders = self.strategy.query(Vec::new(), 
             Vec::new(), self.peers.iter().map(|(_, p)| &p.state).collect::<Vec<_>>(), &self.partial_file);
 
-        //for order in orders {
-        //}
+        self._execute_orders(orders)
 
-        orders.into_iter().map(|order| order.action).collect::<Vec<_>>()
     }
 }
 
 impl PeerServer {
+    fn _execute_orders(&mut self, orders: Vec<Order>) -> Vec<PeerAction> {
+        let mut actions = Vec::new();
+        for order in orders.into_iter() {
+            actions.push(order.action);
+        }
+        actions
+    }
+
     fn _remove_old_peers(&mut self) {
         let for_removal = self._get_timeout_ids();
         for id in for_removal {
@@ -98,8 +105,7 @@ impl PeerServer {
 
     fn _get_timeout_ids(&self) -> Vec<PeerId> {
         let mut for_removal = Vec::new();
-        for (&id, ref mut peer_) in &self.peers {
-            let peer = &mut peer_.state;
+        for (&id, ref mut peer) in &self.peers {
             match peer.state.last_msg_time.elapsed() {
                 Ok(duration) => {
                     if duration.as_secs() > TIMEOUT_SECONDS {
@@ -114,9 +120,8 @@ impl PeerServer {
 
     fn _get_keepalive_ids(&self) -> Vec<PeerId> {
         let mut for_keeping = Vec::new();
-        for (&id, ref mut peer_) in &self.peers {
-            let peer = peer_.state;
-            match peer.last_msg_time.elapsed() {
+        for (&id, ref mut peer) in &self.peers {
+            match peer.state.last_msg_time.elapsed() {
                 Ok(duration) => {
                     if duration.as_secs() > KEEPALIVE_PERIOD {
                         for_keeping.push(id);
@@ -148,7 +153,7 @@ impl PeerServer {
         {
             info!("Received msg {:?} from id {}", msg, id);
 
-            let ref peer = match self.peers.get_mut(&id) {
+            let peer = &mut match self.peers.get_mut(&id) {
                 Some(peer) => peer,
                 None => return PeerStreamAction::Nothing,
             }.state;
@@ -166,8 +171,10 @@ impl PeerServer {
                         if their_hash == &self.hash {
                             info!("Hashes match, sending interested message now");
                             peer.has_handshake = true;
+                            peer.am_choking = false;
                             return PeerStreamAction::SendMessages(vec![PeerMsg::Unchoke,
-                                                                       PeerMsg::Interested]);
+                                                                       PeerMsg::Interested,
+                                                                       PeerMsg::Bitfield(self.partial_file.bit_array())]);
                         } else {
                             peer.disconnected = true;
                             info!("Handshake info hash does not match");
@@ -185,7 +192,7 @@ impl PeerServer {
         let mut handled = true;
 
         {
-            let ref peer = match self.peers.get_mut(&id) {
+            let peer = &mut match self.peers.get_mut(&id) {
                 Some(peer) => peer,
                 None => return PeerStreamAction::Nothing,
             }.state;
@@ -209,7 +216,11 @@ impl PeerServer {
                     peer.peer_interested = false;
                 }
                 PeerMsg::Have(index) => peer.file.set(index as usize, true),
-                PeerMsg::Bitfield(_) => {}
+                PeerMsg::Bitfield(ref bit_field) => {
+                    for (i, bit) in bit_field.iter().enumerate()  {
+                        peer.file.set(i, bit);
+                    }
+                }
                 _ => handled = false,
             };
         }
