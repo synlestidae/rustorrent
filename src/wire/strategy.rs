@@ -1,4 +1,5 @@
 use wire::peer_info::PeerState;
+use metainfo::MetaInfo;
 use wire::action::PeerAction;
 use wire::msg::PeerMsg;
 use wire::action::PeerStreamAction;
@@ -10,22 +11,43 @@ use wire::action::PeerId;
 
 pub trait Strategy {
     fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order>;
+    fn on_handshake(&mut self, id: PeerId) -> Vec<Order>;
+    fn on_choke(&mut self, id: PeerId) -> Vec<Order>;
+    fn on_unchoke(&mut self, id: PeerId) -> Vec<Order>;
+    fn on_interested(&mut self, id: PeerId) -> Vec<Order>;
+    fn on_not_interested(&mut self, id: PeerId) -> Vec<Order>;
+    fn on_have(&mut self, id: PeerId, piece_index: usize) -> Vec<Order>;
+    fn on_bitfield(&mut self, id: PeerId, bitfield: BitVec) ->  Vec<Order>;
+    fn on_request(&mut self, id: PeerId, index: u32, begin: u32, length: u32) -> Vec<Order>;
+    fn on_piece(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order>;
+    fn on_cancel(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order>;
+    fn on_port(&mut self, id: PeerId, port: u16) -> Vec<Order>;
 }
 
 pub struct NormalStrategy {
     orders: HashMap<OrderId, OrderInfo>,
+    peers: HashMap<PeerId, PeerState>,
     pieces_to_request: BitVec,
     next_order_id: usize,
-    piece_length: u64
+    num_pieces: usize,
+    piece_length: u64,
+    partial_file: PartialFile
 }
 
 impl NormalStrategy {
-    pub fn new(num_pieces: u64, piece_length: u64) -> NormalStrategy {
+    pub fn new (metainfo: MetaInfo) -> NormalStrategy {
+        let num_pieces = metainfo.info.pieces.len();
+        let partial_file = PartialFile::new(&metainfo.info);
+        let piece_length = partial_file.piece_length();
+
         NormalStrategy {
             orders: HashMap::new(),
-            pieces_to_request: BitVec::from_elem(num_pieces as usize, true),
+            peers: HashMap::new(),
+            pieces_to_request: BitVec::from_elem(num_pieces, true),
             next_order_id: 0,
-            piece_length: piece_length
+            partial_file: partial_file,
+            num_pieces: num_pieces,
+            piece_length: piece_length,
         }
     }
 
@@ -80,9 +102,110 @@ impl NormalStrategy {
         actions
         //Vec::new()
     }
+
+    fn _get_piece_from_req(&mut self, index: usize, begin: u32, offset: u32) -> Option<PeerMsg> {
+        if self.partial_file.has_piece(index as usize) {
+            let piece = self.partial_file.get_piece_mut(index as usize);
+            return match piece.get_offset(begin as usize, offset as usize) {
+                Some(piece_data) => {
+                    let msg = PeerMsg::Piece(begin, offset, Vec::from(piece_data));
+                    Some(msg)
+                }
+                _ => None,
+            };
+        }
+        None
+    }
 }
 
 impl Strategy for NormalStrategy {
+    fn on_handshake(&mut self, id: PeerId) -> Vec<Order> {
+        let peer = PeerState::new(self.num_pieces, id);
+        self.peers.insert(id, peer);
+        vec![]
+
+    }
+    fn on_choke(&mut self, id: PeerId) -> Vec<Order> {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => peer.peer_choking = true,
+            None => {} 
+        };
+        vec![]
+    }
+    fn on_unchoke(&mut self, id: PeerId) -> Vec<Order> {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => peer.peer_choking = false,
+            None => {} 
+        };
+        vec![]
+
+    }
+    fn on_interested(&mut self, id: PeerId) -> Vec<Order>  {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => peer.peer_interested = true,
+            None => {} 
+        };
+        vec![]
+
+    }
+    fn on_not_interested(&mut self, id: PeerId) -> Vec<Order> {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => peer.peer_interested = false,
+            None => {} 
+        };
+        vec![]
+    }
+
+    fn on_have(&mut self, id: PeerId, piece_index: usize) -> Vec<Order> {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => peer.file.set(piece_index as usize, true),
+            None => {} 
+        };
+        vec![]
+    }
+
+    fn on_bitfield(&mut self, id: PeerId, bitfield: BitVec) ->  Vec<Order> {
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => {
+                    let limit = peer.file.bit_array().len();
+                    for (i, bit) in bitfield.iter().enumerate()  {
+                        if i >= limit {
+                            break;
+                        }
+                        peer.file.set(i, bit);
+                    }
+                },
+            None => {} 
+        };
+        vec![]
+    }
+    fn on_request(&mut self, id: PeerId, index: u32, begin: u32, length: u32) -> Vec<Order> {
+        let piece_result = self._get_piece_from_req(index as usize, begin, length);
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => {
+                let response = piece_result;
+                match response {
+                    Some(r) => unimplemented!(),
+                    _ => Vec::new(),
+                }
+            },
+            _ => Vec::new()
+        }
+    }
+
+    fn on_piece(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order> {
+        self.partial_file.add_piece(index as usize, begin as usize, block);
+        Vec::new()
+    }
+
+    fn on_cancel(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order> {
+        Vec::new()
+    }
+
+    fn on_port(&mut self, id: PeerId, port: u16) -> Vec<Order> {
+        Vec::new()
+    }
+
     fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) 
         -> Vec<Order> {
         let actions = self.request_pieces(peers, file);

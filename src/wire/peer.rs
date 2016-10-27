@@ -50,7 +50,7 @@ impl ServerHandler for PeerServer {
             partial_file: partial_file,
             num_pieces: num_pieces,
             pieces_to_request: BitVec::from_elem(num_pieces, true),
-            strategy: NormalStrategy::new(num_pieces as u64, pl)
+            strategy: NormalStrategy::new(metainfo)
         }
     }
 
