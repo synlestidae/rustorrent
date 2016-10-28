@@ -220,7 +220,11 @@ impl Strategy for NormalStrategy {
             Some(ref mut peer) => {
                 let response = piece_result;
                 match response {
-                    Some(r) => unimplemented!(),
+                    Some(r) => {
+                        if piece_result.is_ok() {
+                            return self._make_msg_order(piece_result.unwrap());
+                        }
+                    },
                     _ => Vec::new(),
                 }
             },
