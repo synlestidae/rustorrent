@@ -8,6 +8,7 @@ use bit_vec::BitVec;
 use file::PartialFile;
 use file::PartialFileTrait;
 use wire::action::PeerId;
+use file::PeerFile;
 
 pub trait Strategy {
     fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order>;
@@ -60,25 +61,17 @@ impl NormalStrategy {
         let ready_peers = peers.iter().filter(|peer| !peer.peer_choking && !peer.am_choking && peer.has_handshake);
         for peer in ready_peers {
             let id = peer.peer_id;
-            let mut missing = partial_file.bit_array();
-
-            missing.negate();
-            let mut them = peer.file.bit_array();
-            missing.intersect(&them);
-            missing.intersect(&self.pieces_to_request);
-
+            let missing = self._get_missing(&peer.file); 
             //now have eligible pieces to request
-            let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
-            let piece_len = self.piece_length;
-            let mut bytes_requested = 0;
-            let mut pieces_request = 0;
+            //let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
+            //let piece_len = self.piece_length;
+            //let mut bytes_requested = 0;
+            //let mut pieces_request = 0;
 
             let mut msgs = Vec::new();
-            for (piece_count, piece_index) in pieces.into_iter().enumerate() {
-                if bytes_requested > MAX_BYTES_PER_REQUEST || piece_count > MAX_PIECES_PEER {
-                    break;
-                }
-                let mut pieces = NormalStrategy::piece_request(piece_index, piece_len, MAX_BLOCK_SIZE);
+            let missing = self._get_missing(&peer.file);
+            for (piece_index, _) in missing.into_iter().enumerate().filter(|&(_, val)| val){
+                let mut pieces = NormalStrategy::piece_request(piece_index as u64, self.piece_length, MAX_BLOCK_SIZE);
                 self.pieces_to_request.set(piece_index as usize, false);
                 msgs.append(&mut pieces);
             }
@@ -125,6 +118,27 @@ impl NormalStrategy {
         }
         None
     }
+
+    fn _make_order(&mut self, action: PeerAction) -> Order {
+        self.next_order_id += 1;
+        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
+    }
+
+    fn _make_msg_order(&mut self, id: PeerId, msgs: Vec<PeerMsg>) -> Order {
+        self.next_order_id += 1;
+        let action = PeerAction(id, PeerStreamAction::SendMessages(msgs));
+        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
+    }
+
+
+    fn _get_missing(&self, peer_file: &PeerFile) -> BitVec { 
+        let mut missing = self.partial_file.bit_array();
+        missing.negate();
+        let mut them = peer_file.bit_array();
+        missing.intersect(&them);
+        missing.intersect(&self.pieces_to_request);
+        missing
+    }
 }
 
 impl Strategy for NormalStrategy {
@@ -166,16 +180,23 @@ impl Strategy for NormalStrategy {
     }
 
     fn on_have(&mut self, id: PeerId, piece_index: usize) -> Vec<Order> {
-        match self.peers.get_mut(&id) {
-            Some(ref mut peer) => {
-                peer.file.set(piece_index as usize, true);
-                if !peer.partial_file.get(piece_index) {
-                    let p_msgs = NormalStrategy::piece_request(piece_index, piece_len, MAX_BLOCK_SIZE);
+        let msgs = {
+            match self.peers.get_mut(&id) {
+                Some(ref mut peer) => {
+                    peer.file.set(piece_index as usize, true);
+                    let file_vec = peer.file.bit_array();
+                    if let Some(true) = file_vec.get(piece_index) {
+                        let p_msgs = NormalStrategy::piece_request(piece_index as u64, self.piece_length, MAX_BLOCK_SIZE);
+                        p_msgs
+                    } else {
+                        return Vec::new();
+                    }
                 }
+                None => return Vec::new()
             }
-            None => {} 
         };
-        vec![]
+        let p_orders = self._make_msg_order(id, msgs);
+        return vec![p_orders];
     }
 
     fn on_bitfield(&mut self, id: PeerId, bitfield: BitVec) ->  Vec<Order> {
@@ -226,19 +247,15 @@ impl Strategy for NormalStrategy {
         let mut orders = Vec::new();
 
         for action in actions {
-            orders.push(make_order(action));
+            orders.push(self._make_order(action));
             self.next_order_id += 1;
         }
 
         orders
     }
 
-    fn _make_order(&mut self, action: PeerStreamAction) {
-        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
-    }
-
+    
 }
-
 
 struct OrderInfo;
 type OrderId = usize;
