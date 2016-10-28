@@ -24,6 +24,10 @@ pub trait Strategy {
     fn on_port(&mut self, id: PeerId, port: u16) -> Vec<Order>;
 }
 
+const MAX_BLOCK_SIZE: u64 = 2 << 14;
+const MAX_BYTES_PER_REQUEST: u64 = 1024 * 512;
+const MAX_PIECES_PEER: usize = 10;
+
 pub struct NormalStrategy {
     orders: HashMap<OrderId, OrderInfo>,
     peers: HashMap<PeerId, PeerState>,
@@ -69,38 +73,43 @@ impl NormalStrategy {
             let mut bytes_requested = 0;
             let mut pieces_request = 0;
 
-            const MAX_BLOCK_SIZE: u64 = 2 << 14;
-            const MAX_BYTES_PER_REQUEST: u64 = 1024 * 512;
-            const MAX_PIECES_PEER: usize = 10;
-
             let mut msgs = Vec::new();
             for (piece_count, piece_index) in pieces.into_iter().enumerate() {
                 if bytes_requested > MAX_BYTES_PER_REQUEST || piece_count > MAX_PIECES_PEER {
                     break;
                 }
-                if piece_len > MAX_BLOCK_SIZE {
-                    let mut offset = 0;
-                    while offset < piece_len {
-                        if (offset + MAX_BLOCK_SIZE > piece_len) {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, 
-                                MAX_BLOCK_SIZE as u32));
-                        } else {
-                            msgs.push(PeerMsg::Request(piece_index as u32, offset as u32,
-                                MAX_BLOCK_SIZE as u32));
-                        }
-                        offset += MAX_BLOCK_SIZE;
-                    }
-                } else {
-                    msgs.push(PeerMsg::Request(piece_index as u32, 0, piece_len as u32));
-                }
+                let mut pieces = NormalStrategy::piece_request(piece_index, piece_len, MAX_BLOCK_SIZE);
                 self.pieces_to_request.set(piece_index as usize, false);
+                msgs.append(&mut pieces);
             }
 
             let req_actions = PeerAction(id, PeerStreamAction::SendMessages(msgs));
             actions.push(req_actions);
         }
         actions
-        //Vec::new()
+    }
+
+    fn piece_request(piece_index: u64, piece_len: u64, max_block_size: u64) -> Vec<PeerMsg> {
+        let mut msgs = Vec::new();
+        let mut bytes_requested = 0;
+
+        if piece_len > max_block_size {
+            let mut offset = 0;
+            while offset < piece_len {
+                if (offset + max_block_size > piece_len) {
+                    msgs.push(PeerMsg::Request(piece_index as u32, offset as u32, 
+                        max_block_size as u32));
+                } else {
+                    msgs.push(PeerMsg::Request(piece_index as u32, offset as u32,
+                        max_block_size as u32));
+                }
+                offset += max_block_size;
+            }
+        } else {
+            msgs.push(PeerMsg::Request(piece_index as u32, 0, piece_len as u32));
+        }
+
+        msgs
     }
 
     fn _get_piece_from_req(&mut self, index: usize, begin: u32, offset: u32) -> Option<PeerMsg> {
@@ -158,7 +167,12 @@ impl Strategy for NormalStrategy {
 
     fn on_have(&mut self, id: PeerId, piece_index: usize) -> Vec<Order> {
         match self.peers.get_mut(&id) {
-            Some(ref mut peer) => peer.file.set(piece_index as usize, true),
+            Some(ref mut peer) => {
+                peer.file.set(piece_index as usize, true);
+                if !peer.partial_file.get(piece_index) {
+                    let p_msgs = NormalStrategy::piece_request(piece_index, piece_len, MAX_BLOCK_SIZE);
+                }
+            }
             None => {} 
         };
         vec![]
@@ -212,13 +226,19 @@ impl Strategy for NormalStrategy {
         let mut orders = Vec::new();
 
         for action in actions {
-            orders.push(Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted});
+            orders.push(make_order(action));
             self.next_order_id += 1;
         }
 
         orders
     }
+
+    fn _make_order(&mut self, action: PeerStreamAction) {
+        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
+    }
+
 }
+
 
 struct OrderInfo;
 type OrderId = usize;
