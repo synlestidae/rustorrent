@@ -7,7 +7,7 @@ use file::PartialFile;
 use bit_vec::BitVec;
 use std::str;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum PeerMsg {
     // info hash, peer id
     HandShake(String, SHA1Hash20b, SHA1Hash20b),
@@ -141,7 +141,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
         return Err(MsgParseError::TooShort);
     }
 
-    let mut len = BigEndian::read_u32(&bytes[0..4]) as usize;
+    let len = BigEndian::read_u32(&bytes[0..4]) as usize;
     info!("LENNY {}", len);
 
     if len == 0 {
@@ -153,16 +153,21 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
         return Err(MsgParseError::TooShort);
     } 
 
-    let bytes = &bytes[4..bytes.len()];
     //len = len - 4;
     if bytes.len() < len {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
     }
 
-    info!("Message has id {}", bytes[0]);
+    let id = bytes[4];
+    let bytes = &bytes[5..(4 + len)];
 
-    let result = match bytes[0] {
+    info!("Message has id {}", id);
+
+    let end_all = bytes.len();//4 + len;
+    let end = end_all;//bytes.len();
+
+    let result = match id {
         0 => Ok(PeerMsg::Choke),
         1 => Ok(PeerMsg::Unchoke),
         2 => Ok(PeerMsg::Interested),
@@ -171,11 +176,12 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
             if len < ID_LEN + INT_LEN {
                 return Err(MsgParseError::TooShortForId);
             }
-            let piece_index = BigEndian::read_u32(&bytes[1..(1 + INT_LEN)]);
+            info!("Bytes for Have {:?}", bytes);
+            let piece_index = BigEndian::read_u32(&bytes[0..INT_LEN]);
             Ok(PeerMsg::Have(piece_index))
         }
         5 => {
-            let bitfield_bytes = &bytes[0..len - 1];
+            let bitfield_bytes = &bytes[0..end];
             Ok(PeerMsg::Bitfield(BitVec::from_bytes(bitfield_bytes)))
         }
         6 => {
@@ -183,7 +189,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
                 return Err(MsgParseError::TooShortForId);
             }
 
-            match _parse_three_u32(&bytes[1..1 + (INT_LEN * 3)]) {
+            match _parse_three_u32(&bytes[0..end]) {
                 (index, begin, end) => Ok((PeerMsg::Request(index, begin, end))),
             }
         }
@@ -191,9 +197,9 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
             if len <= 9 {
                 return Err(MsgParseError::TooShortForId);
             }
-            let index = BigEndian::read_u32(&bytes[1..(1 + INT_LEN)]);
-            let begin = BigEndian::read_u32(&bytes[(1 + INT_LEN)..(1 + INT_LEN * 2)]);
-            let block = &bytes[(1 + INT_LEN * 2)..len];
+            let index = BigEndian::read_u32(&bytes[0..INT_LEN]);
+            let begin = BigEndian::read_u32(&bytes[(1 + INT_LEN)..(1 + (INT_LEN * 2))]);
+            let block = &bytes[(1 + (INT_LEN * 2))..end];
             let block_data = Vec::from(block);
             Ok((PeerMsg::Piece(index, begin, block_data)))
         }
@@ -202,7 +208,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
                 return Err(MsgParseError::TooShortForId);
             }
 
-            match _parse_three_u32(&bytes[1..1 + (INT_LEN * 3)]) {
+            match _parse_three_u32(&bytes[0..end]) {
                 (index, begin, end) => Ok((PeerMsg::Cancel(index, begin, end))),
             }
         }
@@ -210,7 +216,7 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
             if len != 3 {
                 return Err(MsgParseError::TooShortForId);
             }
-            let port = BigEndian::read_u32(&bytes[1..(1 + PORT_LEN)]);
+            let port = BigEndian::read_u32(&bytes[0..PORT_LEN]);
             Ok(PeerMsg::Port(port))
         }
         _ => Err(MsgParseError::InvalidId),

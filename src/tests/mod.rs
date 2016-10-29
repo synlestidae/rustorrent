@@ -1,4 +1,5 @@
 mod metainfo;
+mod peer_stream;
 
 #[allow(unused_imports)]
 use bencode::{BString, Bencode, BInt, BList};

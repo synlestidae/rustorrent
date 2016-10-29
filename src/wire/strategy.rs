@@ -216,20 +216,18 @@ impl Strategy for NormalStrategy {
     }
     fn on_request(&mut self, id: PeerId, index: u32, begin: u32, length: u32) -> Vec<Order> {
         let piece_result = self._get_piece_from_req(index as usize, begin, length);
-        match self.peers.get_mut(&id) {
-            Some(ref mut peer) => {
-                let response = piece_result;
-                match response {
-                    Some(r) => {
-                        if piece_result.is_ok() {
-                            return self._make_msg_order(piece_result.unwrap());
-                        }
-                    },
-                    _ => Vec::new(),
-                }
-            },
-            _ => Vec::new()
+        let order = match piece_result {
+            Some(r) => {
+                self._make_msg_order(id, vec![r])
+            }
+            _ => return Vec::new(),
+        };
+
+        if self.peers.contains_key(&id) {
+            return vec![order];
         }
+
+        Vec::new()
     }
 
     fn on_piece(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order> {

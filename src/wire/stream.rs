@@ -20,7 +20,7 @@ use wire::action::PeerId;
 use wire::peer::PeerServer;
 
 const OUTSIDE_MSG: Token = Token(0);
-type StreamId = u32;
+pub type StreamId = u32;
 
 pub struct Protocol {
     streams: HashMap<StreamId, (TcpStream, PeerStream)>,
@@ -33,15 +33,6 @@ pub struct Protocol {
     pending_actions: Vec<PeerAction>,
     stats: Stats,
     next_peer_id: usize,
-}
-
-struct PeerStream {
-    id: StreamId,
-    bytes_in: Vec<u8>,
-    bytes_out: Vec<u8>,
-    handshake_sent: bool,
-    handshake_received: bool,
-    disconnected: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -61,8 +52,17 @@ impl Stats {
     }
 }
 
+pub struct PeerStream {
+    id: StreamId,
+    bytes_in: Vec<u8>,
+    bytes_out: Vec<u8>,
+    handshake_sent: bool,
+    handshake_received: bool,
+    disconnected: bool,
+}
+
 impl PeerStream {
-    fn new(id: StreamId) -> PeerStream {
+    pub fn new(id: StreamId) -> PeerStream {
         PeerStream {
             id: id,
             bytes_in: Vec::new(),
@@ -73,16 +73,16 @@ impl PeerStream {
         }
     }
 
-    fn write_in(&mut self, mut bytes: Vec<u8>) {
+    pub fn write_in(&mut self, mut bytes: Vec<u8>) {
         self.bytes_in.append(&mut bytes);
     }
 
-    fn write_out(&mut self, mut bytes: Vec<u8>) {
+    pub fn write_out(&mut self, mut bytes: Vec<u8>) {
         info!("This goes out {:?}", bytes);
         self.bytes_out.append(&mut bytes);
     }
 
-    fn message(&mut self) -> Option<PeerMsg> {
+    pub fn message(&mut self) -> Option<PeerMsg> {
         info!("Bytes in: {}", self.bytes_in.len());
         if self.bytes_in.len() == 0 {
             return None;
@@ -90,7 +90,7 @@ impl PeerStream {
 
         match parse_peermsg(&self.bytes_in) {
             Ok((msg, offset)) => {
-                info!("Parsed a message of len {}", offset);
+                println!("Parsed a message of len {}", offset);
                 if offset < self.bytes_in.len() {
                     self.bytes_in = self.bytes_in.split_off(offset);
                 } else {
@@ -107,7 +107,7 @@ impl PeerStream {
         }
     }
 
-    fn take(&mut self, out: &mut Write) -> io::Result<usize> {
+    pub fn take(&mut self, out: &mut Write) -> io::Result<usize> {
         const MAX_BYTES_WRITE: usize = 1024 * 128;
         info!("Attempting to write {} bytes", self.bytes_out.len());
         let result = out.write(&self.bytes_out);
@@ -121,6 +121,10 @@ impl PeerStream {
             }
         };
         result
+    }
+
+    pub fn len_in(&self) -> usize {
+        self.bytes_in.len()
     }
 }
 
