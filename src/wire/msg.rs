@@ -7,7 +7,7 @@ use file::PartialFile;
 use bit_vec::BitVec;
 use std::str;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum PeerMsg {
     // info hash, peer id
     HandShake(String, SHA1Hash20b, SHA1Hash20b),
