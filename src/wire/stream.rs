@@ -90,7 +90,7 @@ impl PeerStream {
 
         match parse_peermsg(&self.bytes_in) {
             Ok((msg, offset)) => {
-                println!("Parsed a message of len {}", offset);
+                info!("Parsed a message of len {}", offset);
                 if offset < self.bytes_in.len() {
                     self.bytes_in = self.bytes_in.split_off(offset);
                 } else {
