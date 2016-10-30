@@ -11,7 +11,6 @@ use wire::action::PeerId;
 use file::PeerFile;
 
 pub trait Strategy {
-    fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) -> Vec<Order>;
     fn on_handshake(&mut self, id: PeerId) -> Vec<Order>;
     fn on_choke(&mut self, id: PeerId) -> Vec<Order>;
     fn on_unchoke(&mut self, id: PeerId) -> Vec<Order>;
@@ -23,6 +22,7 @@ pub trait Strategy {
     fn on_piece(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order>;
     fn on_cancel(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order>;
     fn on_port(&mut self, id: PeerId, port: u16) -> Vec<Order>;
+    fn query(&mut self) -> Vec<Order>;
 }
 
 const MAX_BLOCK_SIZE: u64 = 2 << 14;
@@ -121,13 +121,13 @@ impl NormalStrategy {
 
     fn _make_order(&mut self, action: PeerAction) -> Order {
         self.next_order_id += 1;
-        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
+        Order {order_id: self.next_order_id, action: action}
     }
 
     fn _make_msg_order(&mut self, id: PeerId, msgs: Vec<PeerMsg>) -> Order {
         self.next_order_id += 1;
         let action = PeerAction(id, PeerStreamAction::SendMessages(msgs));
-        Order {order_id: self.next_order_id, action: action, status: OrderStatus::NotStarted}
+        Order {order_id: self.next_order_id, action: action}
     }
 
 
@@ -243,58 +243,23 @@ impl Strategy for NormalStrategy {
         Vec::new()
     }
 
-    fn query(&mut self, pending: Vec<&Order>, done: Vec<OrderResult>, peers: Vec<&PeerState>, file: &PartialFile) 
-        -> Vec<Order> {
-        let actions = self.request_pieces(peers, file);
-        let mut orders = Vec::new();
-
-        for action in actions {
-            orders.push(self._make_order(action));
-            self.next_order_id += 1;
-        }
-
-        orders
+    fn query(&mut self) -> Vec<Order> {
+        vec![]
     }
-
-    
 }
 
 struct OrderInfo;
 type OrderId = usize;
 
-pub struct OrderResult {
-    status: OrderStatus,
-    order_id: OrderId
-}
-
 pub struct Order {
-    status: OrderStatus,
     order_id: OrderId,
     pub action: PeerAction
 }
 
 impl Order {
-    pub fn complete(&self, status: OrderStatus) -> OrderResult {
-        OrderResult { order_id: self.order_id, status: status}
-    }
-
     pub fn id(&self) -> OrderId {
         self.order_id
     }
-
-    pub fn status(&self) -> OrderStatus {
-        self.status
-    }
-
-    pub fn set_status(&mut self, status: OrderStatus) {
-        self.status = status;
-    }
 }
 
-#[derive(Eq, PartialEq, Clone, Copy)]
-pub enum OrderStatus {
-    NotStarted,
-    InProgress, 
-    Failed,
-    Done
-}
+

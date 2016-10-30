@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use file::{PartialFileTrait, PeerFile};
 use bit_vec::BitVec;
 use wire::peer_info::PeerState;
-use wire::strategy::{Strategy, NormalStrategy, Order, OrderResult};
+use wire::strategy::{Strategy, NormalStrategy, Order};
 
 const TIMEOUT_SECONDS: u64 = 60 * 5;
 const KEEPALIVE_PERIOD: u64 = 30;
@@ -79,11 +79,9 @@ impl ServerHandler for PeerServer {
     fn on_loop(&mut self) -> Vec<PeerAction> {
         info!("We have {} peers", self.peers.len());
         self._remove_old_peers();
-        let orders = self.strategy.query(Vec::new(), 
-            Vec::new(), self.peers.iter().map(|(_, p)| &p.state).collect::<Vec<_>>(), &self.partial_file);
+        let orders = self.strategy.query();
 
         self._execute_orders(orders)
-
     }
 }
 
