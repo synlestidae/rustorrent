@@ -38,7 +38,7 @@ pub struct Protocol {
     next_peer_id: usize,
 }
 
-const LOG_IN: bool = false;
+const LOG_IN: bool = true;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Stats {
