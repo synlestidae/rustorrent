@@ -30,9 +30,8 @@ const MAX_BYTES_PER_REQUEST: u64 = 1024 * 512;
 const MAX_PIECES_PEER: usize = 10;
 
 pub struct NormalStrategy {
-    orders: HashMap<OrderId, OrderInfo>,
     peers: HashMap<PeerId, PeerState>,
-    pieces_to_request: BitVec,
+    pieces_to_request: HashMap<u64, Vec<(u64, u64)>>,
     next_order_id: usize,
     num_pieces: usize,
     piece_length: u64,
@@ -46,9 +45,8 @@ impl NormalStrategy {
         let piece_length = partial_file.piece_length();
 
         NormalStrategy {
-            orders: HashMap::new(),
             peers: HashMap::new(),
-            pieces_to_request: BitVec::from_elem(num_pieces, true),
+            pieces_to_request: HashMap::new(),//BitVec::from_elem(num_pieces, true),
             next_order_id: 0,
             partial_file: partial_file,
             num_pieces: num_pieces,
@@ -56,23 +54,32 @@ impl NormalStrategy {
         }
     }
 
-    pub fn request_pieces<F: PartialFileTrait>(&mut self, peers: Vec<&PeerState>, partial_file: &F) -> Vec<PeerAction> {
+    pub fn request_pieces(&mut self) -> Vec<PeerAction> {
         let mut actions = Vec::new();
-        let ready_peers = peers.iter().filter(|peer| !peer.peer_choking && !peer.am_choking && peer.has_handshake);
-        for peer in ready_peers {
-            let id = peer.peer_id;
-            let missing = self._get_missing(&peer.file); 
-            //now have eligible pieces to request
-            //let mut pieces = missing.into_iter().enumerate().filter(|&(_, x)| x).map(|(i, _)| i as u64).collect::<Vec<u64>>();
-            //let piece_len = self.piece_length;
-            //let mut bytes_requested = 0;
-            //let mut pieces_request = 0;
+        let mut ready_peers = self.peers.values()
+            .filter(|peer| !peer.peer_choking && !peer.am_choking && peer.has_handshake)
+            .collect::<Vec<_>>();
 
+        // sort by score
+        ready_peers.sort_by(|&a, &b| b.score.cmp(&a.score));
+
+        for peer in ready_peers.iter() {
+            let id = peer.peer_id;
+            let missing = self._get_missing(&peer.file);
             let mut msgs = Vec::new();
             let missing = self._get_missing(&peer.file);
+
             for (piece_index, _) in missing.into_iter().enumerate().filter(|&(_, val)| val){
                 let mut pieces = NormalStrategy::piece_request(piece_index as u64, self.piece_length, MAX_BLOCK_SIZE);
-                self.pieces_to_request.set(piece_index as usize, false);
+                let mut requested = Vec::new();
+                for piece in pieces.iter() {
+                    match piece {
+                        &PeerMsg::Request(_, offset, size) => requested.push((offset as u64, (offset + size) as u64)),
+                        _ => ()
+                    }
+                }
+                requested.sort();
+                self.pieces_to_request.insert(piece_index as u64, requested);
                 msgs.append(&mut pieces);
             }
 
@@ -136,10 +143,18 @@ impl NormalStrategy {
         missing.negate();
         let mut them = peer_file.bit_array();
         missing.intersect(&them);
-        missing.intersect(&self.pieces_to_request);
+        for &i in self.pieces_to_request.keys() {
+            missing.set(i as usize, false);
+        }
+        //missing.intersect(&self.pieces_to_request);
         missing
     }
 }
+
+const HAVE_SCORE: u64 = 1;
+const BITFIELD_SCORE: u64 = 10;
+const REQUEST_SCORE: u64 = 1;
+const PIECE_SCORE: u64 = 5;
 
 impl Strategy for NormalStrategy {
     fn on_handshake(&mut self, id: PeerId) -> Vec<Order> {
@@ -183,6 +198,7 @@ impl Strategy for NormalStrategy {
         let msgs = {
             match self.peers.get_mut(&id) {
                 Some(ref mut peer) => {
+                    peer.score += HAVE_SCORE;
                     peer.file.set(piece_index as usize, true);
                     let file_vec = peer.file.bit_array();
                     if let Some(true) = file_vec.get(piece_index) {
@@ -202,6 +218,7 @@ impl Strategy for NormalStrategy {
     fn on_bitfield(&mut self, id: PeerId, bitfield: BitVec) ->  Vec<Order> {
         match self.peers.get_mut(&id) {
             Some(ref mut peer) => {
+                    peer.score += BITFIELD_SCORE;
                     let limit = peer.file.bit_array().len();
                     for (i, bit) in bitfield.iter().enumerate()  {
                         if i >= limit {
@@ -223,15 +240,38 @@ impl Strategy for NormalStrategy {
             _ => return Vec::new(),
         };
 
-        if self.peers.contains_key(&id) {
-            return vec![order];
+        
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => {
+                peer.score += REQUEST_SCORE;
+                return vec![order];
+            }
+            _ => vec![]
         }
-
-        Vec::new()
     }
 
     fn on_piece(&mut self, id: PeerId, index: u32, begin: u32, block: Vec<u8>) -> Vec<Order> {
+        let block_len = block.len();
         self.partial_file.add_piece(index as usize, begin as usize, block);
+
+        match self.peers.get_mut(&id) {
+            Some(ref mut peer) => {
+                peer.score += PIECE_SCORE;
+            }
+            _ => {}
+        }
+
+        
+        let blocks = match self.pieces_to_request.remove(&(index as u64)) {
+            Some(blocks) => blocks.clone().into_iter().filter(|&(start, end)|  
+                start == (index as u64) && end == (index + block_len as u32) as u64).collect(),
+            None => vec![]
+        };
+
+        if blocks.len() > 0 {
+            self.pieces_to_request.insert(index as u64, blocks);
+        }
+        
         Vec::new()
     }
 
@@ -244,7 +284,7 @@ impl Strategy for NormalStrategy {
     }
 
     fn query(&mut self) -> Vec<Order> {
-        vec![]
+        self.request_pieces().into_iter().map(|a| self._make_order(a)).collect()
     }
 }
 

@@ -13,6 +13,7 @@ pub struct PeerState {
     pub last_msg_time: SystemTime,
     pub last_msg_sent_time: SystemTime,
     pub file: PeerFile,
+    pub score: u64,
     pub connection_time: SystemTime,
 }
 
@@ -28,6 +29,7 @@ impl PeerState {
             am_interested: false,
             last_msg_time: SystemTime::now(),
             last_msg_sent_time: SystemTime::now(),
+            score: 0,
             connection_time: SystemTime::now(),
             file: PeerFile::new(len),
         }
