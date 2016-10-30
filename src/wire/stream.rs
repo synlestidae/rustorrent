@@ -4,6 +4,9 @@ use std::net::SocketAddr;
 use std::io::{Read, Write};
 use std::io;
 use std::error::Error;
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::fs::File;
 
 use mio::*;
 use mio::tcp::TcpStream;
@@ -34,6 +37,8 @@ pub struct Protocol {
     stats: Stats,
     next_peer_id: usize,
 }
+
+const LOG_IN: bool = false;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Stats {
@@ -74,6 +79,18 @@ impl PeerStream {
     }
 
     pub fn write_in(&mut self, mut bytes: Vec<u8>) {
+        let path = &format!("{}.dat", self.id);
+        if LOG_IN {
+            if !Path::new(path).exists() {
+                File::create(path);
+            }
+            let mut file =
+                OpenOptions::new()
+                .write(true)
+                .append(true)
+                .open(path)
+                .unwrap();
+        }
         self.bytes_in.append(&mut bytes);
     }
 
