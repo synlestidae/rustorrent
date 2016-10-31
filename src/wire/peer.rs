@@ -185,80 +185,34 @@ impl PeerServer {
                 }
             }
         }
-
-        let mut outgoing_msgs = Vec::new();
-        let mut handled = true;
-
-        {
-            let peer = &mut match self.peers.get_mut(&id) {
-                Some(peer) => peer,
-                None => return PeerStreamAction::Nothing,
-            }.state;
-
-            // messages that mutate the peer
-            match msg {
-                PeerMsg::HandShake(..) => {
-                    peer.has_handshake = true;
-                }
-                PeerMsg::KeepAlive => {}
-                PeerMsg::Choke => {
-                    peer.peer_choking = true;
-                }
-                PeerMsg::Unchoke => {
-                    peer.peer_choking = false;
-                }
-                PeerMsg::Interested => {
-                    peer.peer_interested = true;
-                }
-                PeerMsg::NotInterested => {
-                    peer.peer_interested = false;
-                }
-                PeerMsg::Have(index) => peer.file.set(index as usize, true),
-                PeerMsg::Bitfield(ref bit_field) => {
-                    let limit = peer.file.bit_array().len();
-                    for (i, bit) in bit_field.iter().enumerate()  {
-                        if i >= limit {
-                            break;
-                        }
-                        peer.file.set(i, bit);
-                    }
-                }
-                _ => handled = false,
-            };
-        }
-
-        // messages that don't need to mutate peer
-        let choking = {
-            match self.peers.get(&id) {
-                Some(peer) => peer.state.am_choking,
-                None => return PeerStreamAction::Nothing,
-            }
+        //handshake is okay
+        let orders = match msg {
+            PeerMsg::HandShake(_, _, _) => self.strategy.on_handshake(id),
+            PeerMsg::KeepAlive => return PeerStreamAction::Nothing,
+            PeerMsg::Choke => self.strategy.on_choke(id),
+            PeerMsg::Unchoke => self.strategy.on_unchoke(id),
+            PeerMsg::Interested => self.strategy.on_interested(id),
+            PeerMsg::NotInterested => self.strategy.on_not_interested(id),
+            PeerMsg::Have(pi) => self.strategy.on_have(id, pi as usize),
+            PeerMsg::Bitfield(bit_vec) => self.strategy.on_bitfield(id, bit_vec),
+            PeerMsg::Request(index, begin, length) => self.strategy.on_request(id, index, begin, length),
+            PeerMsg::Piece(index, begin, block) => self.strategy.on_piece(id, index, begin, block),
+            PeerMsg::Cancel(index, begin, block) =>  return PeerStreamAction::Nothing,
+            //self.strategy.on_cancel(id, index, begin, block),
+            PeerMsg::Port(port) => self.strategy.on_port(id, port as u16)
         };
 
-        if !choking && !handled {
-            match msg {
-                PeerMsg::Request(index, begin, offset) => {
-                    let response = self._get_piece_from_req(index as usize, begin, offset);
-                    match response {
-                        Some(r) => outgoing_msgs.push(r),
-                        _ => (),
-                    }
-                }
-                PeerMsg::Piece(index, begin, block) => {
-                    self.partial_file.add_piece(index as usize, begin as usize, block);
-                }
-                PeerMsg::Cancel(..) => {}
-                PeerMsg::Port(_) => {}
-                _ => handled = true,
+        //let actions = orders.into_iter().map(|order| order.action.1);
+        //actions.collect()
+        let mut msgs = Vec::new();
+        for order in orders {
+            match order.action.1 {
+                PeerStreamAction::SendMessages(mut msgs_to_send) => {
+                    msgs.append(&mut msgs_to_send);
+                },
+                _ => ()
             }
         }
-
-        info!("We have messages to send: {:?}", outgoing_msgs);
-
-        if outgoing_msgs.len() > 0 {
-            PeerStreamAction::SendMessages(outgoing_msgs)
-        } else {
-            PeerStreamAction::Nothing
-        }
+        PeerStreamAction::SendMessages(msgs)
     }
 }

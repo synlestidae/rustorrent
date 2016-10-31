@@ -83,3 +83,31 @@ fn test_parses_notinterested() {
     assert_eq!(stream.len_in(), 0);
     assert_eq!(stream.message(), None);
 }
+
+#[test]
+fn test_converts_messages_correctly() {
+    let mut stream = PeerStream::new(0);
+    let messages = vec![
+        PeerMsg::HandShake("BitTorrent protocol".to_string(), [0; 20].into_iter()
+            .map(|&x| x).collect(), 
+            [0; 20].into_iter().map(|&x| x).collect()),
+        PeerMsg::Unchoke,
+        PeerMsg::Interested,
+        PeerMsg::KeepAlive,
+        PeerMsg::Bitfield(BitVec::from_elem(10, false))
+    ];
+    for msg in messages.clone().into_iter() {
+        stream.bytes_in.append(&mut msg.into());
+        //stream.write_out(msg.into());
+    }
+    let mut i = 0;
+    loop {
+        match stream.message() {
+            Some(msg) => assert_eq!(messages[i], msg),
+            None => break
+        };
+        i += 1;
+    }
+    assert_eq!(messages.len(), i);
+
+}

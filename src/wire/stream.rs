@@ -59,8 +59,8 @@ impl Stats {
 
 pub struct PeerStream {
     id: StreamId,
-    bytes_in: Vec<u8>,
-    bytes_out: Vec<u8>,
+    pub bytes_in: Vec<u8>,
+    pub bytes_out: Vec<u8>,
     handshake_sent: bool,
     handshake_received: bool,
     disconnected: bool,
@@ -90,6 +90,7 @@ impl PeerStream {
                 .append(true)
                 .open(path)
                 .unwrap();
+            file.write(&bytes);
         }
         self.bytes_in.append(&mut bytes);
     }
