@@ -94,16 +94,33 @@ fn test_converts_messages_correctly() {
         PeerMsg::Unchoke,
         PeerMsg::Interested,
         PeerMsg::KeepAlive,
-        PeerMsg::Bitfield(BitVec::from_elem(10, false))
+        PeerMsg::Bitfield(BitVec::from_elem(16, false)),
+        PeerMsg::Have(0),
+        PeerMsg::Have(1), 
+        PeerMsg::Request(0, 1, 2),
+        PeerMsg::Piece(0, 0, vec![0, 1, 1, 2, 3, 5]),
+        PeerMsg::Have(0),
+        PeerMsg::Have(1), 
+        PeerMsg::Unchoke,
+        PeerMsg::Interested,
+        PeerMsg::KeepAlive,
+        PeerMsg::Bitfield(BitVec::from_elem(16, false)),
+
     ];
     for msg in messages.clone().into_iter() {
         stream.bytes_in.append(&mut msg.into());
         //stream.write_out(msg.into());
     }
     let mut i = 0;
+    let mut g = stream.bytes_in.len();
+    println!("i: {}", stream.bytes_in.len());
     loop {
         match stream.message() {
-            Some(msg) => assert_eq!(messages[i], msg),
+            Some(msg) => {
+                println!("j: {} {:?}", g - stream.bytes_in.len(), msg);
+                g = stream.bytes_in.len();
+                assert_eq!(messages[i], msg);
+            },
             None => break
         };
         i += 1;
