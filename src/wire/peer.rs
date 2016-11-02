@@ -170,6 +170,7 @@ impl PeerServer {
                             info!("Hashes match, sending interested message now");
                             peer.has_handshake = true;
                             peer.am_choking = false;
+                            self.strategy.on_handshake(id);
                             return PeerStreamAction::SendMessages(vec![PeerMsg::Unchoke,
                                                                        PeerMsg::Interested,
                                                                        PeerMsg::Bitfield(self.partial_file.bit_array())]);

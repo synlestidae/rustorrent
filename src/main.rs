@@ -35,7 +35,7 @@ use mio::channel::{Sender, Receiver};
 use sha1::Sha1;
 
 const DEFAULT_PORT: u32 = 12001;
-const DEFAULT_PEER_ID: &'static str = "-RT-0001-48230984201";
+const DEFAULT_PEER_ID: &'static str = "-RT0001-048230984201";
 
 pub fn main() {
     init();
@@ -151,10 +151,18 @@ fn _start_tracker(hash: &SHA1Hash20b,
                     interval = i as u64;
                 }
             }
-            &Err(ref err) => {
+            &Err(Some(ref e)) => {
+                info!("Querying tracker failed: {}", e);
+                continue;
+            },
+            &Err(_) => {
+                info!("Unknown error");
                 continue;
             }
+
         };
+
+        interval = 10000;
 
         info!("Interval between requests is {} second(s)", interval);
         thread::sleep(Duration::from_millis(interval * 1000));

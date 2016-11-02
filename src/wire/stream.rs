@@ -190,7 +190,7 @@ impl Protocol {
     }
 
     pub fn run(&mut self) {
-        const EVENT_CAPACITY: usize = 32;
+        const EVENT_CAPACITY: usize = 1;
         let mut events = Events::with_capacity(EVENT_CAPACITY);
         loop {
             self.poll.poll(&mut events, None).unwrap();
@@ -207,6 +207,8 @@ impl Protocol {
                     None => ()
                 }
             }
+
+            info!("All actions handled");
         }
     }
 

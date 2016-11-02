@@ -71,7 +71,6 @@ impl TrackerHandler for HttpTrackerHandler {
 
         // make the request
         let client = Client::new();
-        info!("URL: {}", url);
         match client.get(url).send() {
             Ok(mut response) => {
                 let mut response_bytes = Vec::new();
