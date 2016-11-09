@@ -21,17 +21,20 @@ pub struct PeerServer {
     partial_file: PartialFile,
     num_pieces: usize,
     pieces_to_request: BitVec,
-    strategy: NormalStrategy
+    strategy: NormalStrategy,
 }
 
 struct Peer {
-    state: PeerState, 
-    orders: Vec<Order>
+    state: PeerState,
+    orders: Vec<Order>,
 }
 
 impl Peer {
     pub fn new(state: PeerState) -> Peer {
-        Peer { state: state, orders: Vec::new() } 
+        Peer {
+            state: state,
+            orders: Vec::new(),
+        }
     }
 }
 
@@ -50,7 +53,7 @@ impl ServerHandler for PeerServer {
             partial_file: partial_file,
             num_pieces: num_pieces,
             pieces_to_request: BitVec::from_elem(num_pieces, true),
-            strategy: NormalStrategy::new(metainfo)
+            strategy: NormalStrategy::new(metainfo),
         }
     }
 
@@ -152,9 +155,10 @@ impl PeerServer {
             info!("Received msg {:?} from id {}", msg, id);
 
             let peer = &mut match self.peers.get_mut(&id) {
-                Some(peer) => peer,
-                None => return PeerStreamAction::Nothing,
-            }.state;
+                    Some(peer) => peer,
+                    None => return PeerStreamAction::Nothing,
+                }
+                .state;
 
             if peer.disconnected {
                 return PeerStreamAction::Nothing;
@@ -186,7 +190,7 @@ impl PeerServer {
                 }
             }
         }
-        //handshake is okay
+        // handshake is okay
         let orders = match msg {
             PeerMsg::HandShake(_, _, _) => self.strategy.on_handshake(id),
             PeerMsg::KeepAlive => return PeerStreamAction::Nothing,
@@ -196,22 +200,24 @@ impl PeerServer {
             PeerMsg::NotInterested => self.strategy.on_not_interested(id),
             PeerMsg::Have(pi) => self.strategy.on_have(id, pi as usize),
             PeerMsg::Bitfield(bit_vec) => self.strategy.on_bitfield(id, bit_vec),
-            PeerMsg::Request(index, begin, length) => self.strategy.on_request(id, index, begin, length),
+            PeerMsg::Request(index, begin, length) => {
+                self.strategy.on_request(id, index, begin, length)
+            }
             PeerMsg::Piece(index, begin, block) => self.strategy.on_piece(id, index, begin, block),
-            PeerMsg::Cancel(index, begin, block) =>  return PeerStreamAction::Nothing,
-            //self.strategy.on_cancel(id, index, begin, block),
-            PeerMsg::Port(port) => self.strategy.on_port(id, port as u16)
+            PeerMsg::Cancel(index, begin, block) => return PeerStreamAction::Nothing,
+            // self.strategy.on_cancel(id, index, begin, block),
+            PeerMsg::Port(port) => self.strategy.on_port(id, port as u16),
         };
 
-        //let actions = orders.into_iter().map(|order| order.action.1);
-        //actions.collect()
+        // let actions = orders.into_iter().map(|order| order.action.1);
+        // actions.collect()
         let mut msgs = Vec::new();
         for order in orders {
             match order.action.1 {
                 PeerStreamAction::SendMessages(mut msgs_to_send) => {
                     msgs.append(&mut msgs_to_send);
-                },
-                _ => ()
+                }
+                _ => (),
             }
         }
         PeerStreamAction::SendMessages(msgs)

@@ -61,7 +61,7 @@ impl Into<Vec<u8>> for PeerMsg {
         let mut bytes = match self {
             PeerMsg::KeepAlive => {
                 return vec![0, 0, 0, 0];
-            },
+            }
             PeerMsg::HandShake(mut protocol_id, mut info_hash, mut peer_id) => {
                 let protocol_bytes = protocol_id.into_bytes();
                 let mut p_bytes = &protocol_bytes[0..protocol_bytes.len()];
@@ -134,11 +134,11 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
     const PORT_LEN: usize = 2;
 
     println!("Bytes: len {:?}",
-          if bytes.len() > 80 {
-              &bytes[0..80]
-          } else {
-              bytes
-          });
+             if bytes.len() > 80 {
+                 &bytes[0..80]
+             } else {
+                 bytes
+             });
 
     if bytes.len() < 4 {
         return Err(MsgParseError::TooShort);
@@ -154,9 +154,9 @@ pub fn parse_peermsg(bytes: &[u8]) -> Result<(PeerMsg, usize), MsgParseError> {
     } else if len > bytes.len() {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);
-    } 
+    }
 
-    //len = len - 4;
+    // len = len - 4;
     if bytes.len() < len {
         info!("Len is {} but need {}", bytes.len(), len);
         return Err(MsgParseError::TooShort);

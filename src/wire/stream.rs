@@ -16,7 +16,7 @@ use mio::channel::{Sender, Receiver};
 use metainfo::MetaInfo;
 use metainfo::SHA1Hash20b;
 
-use wire::handler::{ServerHandler};
+use wire::handler::ServerHandler;
 use wire::action::{PeerAction, PeerStreamAction};
 use wire::msg::{PeerMsg, parse_peermsg, parse_handshake};
 use wire::action::PeerId;
@@ -84,8 +84,7 @@ impl PeerStream {
             if !Path::new(path).exists() {
                 File::create(path);
             }
-            let mut file =
-                OpenOptions::new()
+            let mut file = OpenOptions::new()
                 .write(true)
                 .append(true)
                 .open(path)
@@ -151,7 +150,7 @@ pub enum ChanMsg {
     StatsRequest,
     StatsResponse(Stats),
     ThrottleOn(usize),
-    ThrottleOff
+    ThrottleOff,
 }
 
 impl Protocol {
@@ -203,7 +202,7 @@ impl Protocol {
                     Some(&mut (_, ref mut peer)) => {
                         Protocol::_perform_action(action, peer);
                     }
-                    None => ()
+                    None => (),
                 }
             }
 
@@ -308,8 +307,8 @@ impl Protocol {
             match byte {
                 Ok(b) => {
                     bytes_in.push(b);
-                },
-                _ => break
+                }
+                _ => break,
             }
         }
 

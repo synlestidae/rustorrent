@@ -154,7 +154,7 @@ fn _start_tracker(hash: &SHA1Hash20b,
             &Err(Some(ref e)) => {
                 info!("Querying tracker failed: {}", e);
                 continue;
-            },
+            }
             &Err(_) => {
                 info!("Unknown error");
                 continue;

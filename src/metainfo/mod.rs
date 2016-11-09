@@ -103,14 +103,14 @@ impl MetaInfo {
         let pieces_bstr: BString = try!(bdict.get_copy("pieces")
             .ok_or(MetaInfoError::missing_field("pieces")));
         let pieces = pieces_bstr.to_bytes();
-        let mut pieces_vec = Vec::new(); 
+        let mut pieces_vec = Vec::new();
         let mut i = 0;
         while i < pieces.len() {
             let piece = (&pieces[i..(i + 20)]).iter().map(|&b| b).collect();
-            pieces_vec.push(piece);    
+            pieces_vec.push(piece);
             i += 20;
         }
-        
+
         info.pieces = pieces_vec;
         info.name = bdict.get_copy("name");
 

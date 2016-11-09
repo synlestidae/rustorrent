@@ -7,7 +7,8 @@ use init;
 fn test_parses_bitfield_have() {
     let mut stream = PeerStream::new(0);
     stream.write_in(vec![0, 0, 0, 2, 5, 0]); //Bitfield all zeros
-    assert_eq!(stream.message(), Some(PeerMsg::Bitfield(BitVec::from_elem(8, false))));
+    assert_eq!(stream.message(),
+               Some(PeerMsg::Bitfield(BitVec::from_elem(8, false))));
     stream.write_in(vec![0, 0, 0, 5, 4, 0, 0, 0, 0]); //Have(0)
     assert_eq!(stream.message(), Some(PeerMsg::Have(0)));
     assert_eq!(stream.len_in(), 0);
@@ -19,7 +20,8 @@ fn test_parses_unchoke_bitfield_have_() {
     stream.write_in(vec![0, 0, 0, 1, 1]);
     assert_eq!(stream.message(), Some(PeerMsg::Unchoke));
     stream.write_in(vec![0, 0, 0, 3, 5, 0, 0]); //Bitfield all zeros
-    assert_eq!(stream.message(), Some(PeerMsg::Bitfield(BitVec::from_elem(16, false))));
+    assert_eq!(stream.message(),
+               Some(PeerMsg::Bitfield(BitVec::from_elem(16, false))));
     stream.write_in(vec![0, 0, 0, 5, 4, 0, 0, 0, 0]); //Have(0)
     assert_eq!(stream.message(), Some(PeerMsg::Have(0)));
     assert_eq!(stream.message(), None);
@@ -30,9 +32,9 @@ fn test_parses_unchoke_bitfield_have_() {
 fn test_parses_handshake() {
     let mut stream = PeerStream::new(0);
     let hash = [0; 20].into_iter().map(|&x| x).collect();
-    let handshake = PeerMsg::HandShake("BitTorrent protocol".to_string(), 
-         hash,
-        "rust-torrent-1234567".to_string().into_bytes()); 
+    let handshake = PeerMsg::HandShake("BitTorrent protocol".to_string(),
+                                       hash,
+                                       "rust-torrent-1234567".to_string().into_bytes());
     stream.write_in(handshake.clone().into());
     assert_eq!(Some(handshake), stream.message());
     assert_eq!(stream.len_in(), 0);
@@ -109,7 +111,7 @@ fn test_converts_messages_correctly() {
     ];
     for msg in messages.clone().into_iter() {
         stream.bytes_in.append(&mut msg.into());
-        //stream.write_out(msg.into());
+        // stream.write_out(msg.into());
     }
     let mut i = 0;
     let mut g = stream.bytes_in.len();
@@ -120,8 +122,8 @@ fn test_converts_messages_correctly() {
                 println!("j: {} {:?}", g - stream.bytes_in.len(), msg);
                 g = stream.bytes_in.len();
                 assert_eq!(messages[i], msg);
-            },
-            None => break
+            }
+            None => break,
         };
         i += 1;
     }
