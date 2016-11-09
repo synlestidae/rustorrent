@@ -67,11 +67,12 @@ impl NormalStrategy {
             let id = peer.peer_id;
             let missing = self._get_missing(&peer.file);
             let mut msgs = Vec::new();
-            let missing = self._get_missing(&peer.file);
 
             if !peer.am_choking {
                 msgs.push(PeerMsg::Unchoke);
             }
+
+            info!("Missing these: {:?}", missing);
 
             for (piece_index, _) in missing.into_iter().enumerate().filter(|&(_, val)| val){
                 let mut pieces = NormalStrategy::piece_request(piece_index as u64, self.piece_length, MAX_BLOCK_SIZE);
@@ -141,16 +142,11 @@ impl NormalStrategy {
         Order {order_id: self.next_order_id, action: action}
     }
 
-
     fn _get_missing(&self, peer_file: &PeerFile) -> BitVec { 
         let mut missing = self.partial_file.bit_array();
         missing.negate();
         let mut them = peer_file.bit_array();
         missing.intersect(&them);
-        for &i in self.pieces_to_request.keys() {
-            missing.set(i as usize, false);
-        }
-        //missing.intersect(&self.pieces_to_request);
         missing
     }
 }
@@ -226,7 +222,6 @@ impl Strategy for NormalStrategy {
         match self.peers.get_mut(&id) {
             Some(ref mut peer) => {
                     peer.score += BITFIELD_SCORE;
-                    peer.am_choking = true;
                     let limit = peer.file.bit_array().len();
                     for (i, bit) in bitfield.iter().enumerate()  {
                         if i >= limit {
@@ -240,6 +235,7 @@ impl Strategy for NormalStrategy {
         };
         vec![] 
     }
+
     fn on_request(&mut self, id: PeerId, index: u32, begin: u32, length: u32) -> Vec<Order> {
         let piece_result = self._get_piece_from_req(index as usize, begin, length);
         let order = match piece_result {

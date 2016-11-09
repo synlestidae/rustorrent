@@ -96,7 +96,6 @@ impl PeerStream {
     }
 
     pub fn write_out(&mut self, mut bytes: Vec<u8>) {
-        info!("This goes out {:?}", bytes);
         self.bytes_out.append(&mut bytes);
     }
 
@@ -303,19 +302,21 @@ impl Protocol {
         const READ_BUF_SIZE: usize = 1024;
         let mut buf = Vec::with_capacity(READ_BUF_SIZE);
         buf.resize(READ_BUF_SIZE, 0);
-        let bytes_read = match socket.read(&mut buf) {
-            Ok(bytes_read) => {
-                peer.write_in(buf);
-                info!("Read {} bytes from {}", bytes_read, peer.id);//, socket.peer_addr());
-                bytes_read
-            }
-            Err(err) => 0,
-        };
 
+        let mut bytes_in = vec![];
+        for byte in socket.bytes() {
+            match byte {
+                Ok(b) => {
+                    bytes_in.push(b);
+                },
+                _ => break
+            }
+        }
+
+        let bytes_read = bytes_in.len();
+        peer.write_in(bytes_in);
 
         // Attempt to parse a handshake first
-
-
         let mut actions = Vec::new();
         loop {
             let msg = if !peer.handshake_received {
