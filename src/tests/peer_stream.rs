@@ -1,4 +1,4 @@
-use wire::{PeerStream, PeerMsg};
+/*use wire::{PeerStream, PeerMsg};
 use std::iter::FromIterator;
 use bit_vec::BitVec;
 use init;
@@ -130,3 +130,4 @@ fn test_converts_messages_correctly() {
     assert_eq!(messages.len(), i);
 
 }
+*/

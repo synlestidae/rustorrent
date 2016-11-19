@@ -6,5 +6,5 @@ mod msg;
 mod peer_info;
 mod strategy;
 
-pub use wire::stream::{Protocol, ChanMsg, Stats, PeerStream};
+pub use wire::stream::{Protocol, ChanMsg};
 pub use wire::msg::PeerMsg;

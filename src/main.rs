@@ -9,7 +9,7 @@ use rustorrent::init;
 use rustorrent::bencode::decode::{belement_decode, DecodeResult};
 use rustorrent::bencode::BDict;
 use rustorrent::metainfo::{MetaInfo, SHA1Hash20b};
-use rustorrent::wire::{Protocol, ChanMsg, Stats};
+use rustorrent::wire::{Protocol, ChanMsg};
 use rustorrent::convert::TryFrom;
 use rustorrent::bencode::Bencode;
 use rustorrent::bencode::DecodeError;
@@ -131,13 +131,12 @@ fn _start_tracker(hash: &SHA1Hash20b,
                   recv: Receiver<ChanMsg>) {
     const DEFAULT_TRACKER_INTERVAL_SECONDS: u64 = 10;
     let SLEEP_DURATION: Duration = Duration::from_millis(100);
-    let mut stats = Stats::new();
     let mut last_request_time: SystemTime = SystemTime::now();
-    let mut result_response = _get_tracker_response(hash, info, peer_id, &stats);
+    let mut result_response = _get_tracker_response(hash, info, peer_id);
     let mut interval: u64 = DEFAULT_TRACKER_INTERVAL_SECONDS;
 
     loop {
-        let response_result = _get_tracker_response(hash, info, peer_id, &stats);
+        let response_result = _get_tracker_response(hash, info, peer_id);
         match &result_response {
             &Ok(ref r) => {
                 info!("Querying tracker...");
@@ -174,8 +173,7 @@ fn _start_tracker(hash: &SHA1Hash20b,
 
 fn _get_tracker_response(hash: &SHA1Hash20b,
                          info: &MetaInfo,
-                         peer_id: &SHA1Hash20b,
-                         stats: &Stats)
+                         peer_id: &SHA1Hash20b)
                          -> Result<TrackerResp, Option<TrackerError>> {
     let url_result = Url::parse(&info.announce);
     if !url_result.is_ok() {
@@ -183,14 +181,13 @@ fn _get_tracker_response(hash: &SHA1Hash20b,
     }
     let url = url_result.unwrap();
     let mut handler = HttpTrackerHandler::new(url);
-    let request: TrackerReq = _get_request_obj(hash, peer_id, info, &stats);
+    let request: TrackerReq = _get_request_obj(hash, peer_id, info);
     handler.request(&request).map_err(|e| Some(e))
 }
 
 fn _get_request_obj(hash: &SHA1Hash20b,
                     peer_id: &SHA1Hash20b,
-                    info: &MetaInfo,
-                    stats: &Stats)
+                    info: &MetaInfo)
                     -> TrackerReq {
     let mut info_hash = Vec::new();
     info_hash.resize(20, 0);
